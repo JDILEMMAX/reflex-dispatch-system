@@ -89,8 +89,21 @@ def seed_data(conn: sqlite3.Connection) -> None:
     rider_mwangi_id = rider_map[user_map["rider_mwangi"]]
     rider_otieno_id = rider_map[user_map["rider_otieno"]]
 
-    # TODO: @ginahAphane - Add secondary pharmacy or hardware store test accounts if required
-
+    #issue #3- Add secondary pharmacy or Hardaware store
+    secondary_retailers =[
+        ("westlands_pharmacy",hashed_pw,"ROLE_RETAILER","Dr. Fatma S. (Westland Pharmacy)","+254700111222"),
+        ("industrial_hardware",hashed_pw,"ROLE_RETAILER","Otieno J. (Industrial Area Hardware)","+254700333444"),
+    ]
+    cursor.executemany(
+        """
+        INSERT INTO users (username,password_hash,role,full_name,phone)
+        VALUES (?, ?, ?, ?, ?);
+        """,
+        secondary_retailers,
+    )
+    cursor.execute("SELECT id,username From users;")
+    user_map ={row["username"]: row["id"]for row in cursor.fetchall()}
+    
     # 3. Seed Sample Delivery Orders
     orders = [
         (
