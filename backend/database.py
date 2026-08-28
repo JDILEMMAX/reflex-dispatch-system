@@ -197,9 +197,9 @@ def get_order_by_tracking_token(conn: sqlite3.Connection, tracking_token: str) -
         JOIN users ret ON d.retailer_id = ret.id
         LEFT JOIN riders rd ON d.rider_id = rd.id
         LEFT JOIN users ru ON rd.user_id = ru.id
-        WHERE d.tracking_token = ?;
+        WHERE d.tracking_token = ? OR CAST(d.id AS TEXT) = ?;
         """,
-        (tracking_token,),
+        (tracking_token, tracking_token),
     )
     return cursor.fetchone()
 

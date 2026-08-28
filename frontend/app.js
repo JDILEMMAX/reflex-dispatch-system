@@ -644,6 +644,7 @@ async function submitPodPin() {
 
     closePodModal();
     showToast("Proof of Delivery Verified! Order successfully completed.", "success");
+    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
@@ -671,9 +672,60 @@ async function simulateQrScanPod() {
 
     closePodModal();
     showToast("QR Token Matched! Proof of Delivery verified successfully.", "success");
+    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
+  }
+}
+
+// Audio confirmation chime and vibration trigger on verified delivery
+function playDeliveryChime() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        navigator.vibrate([100, 50, 100, 50, 150]);
+      } catch (vibErr) {
+        console.warn("Haptic vibration skipped:", vibErr);
+      }
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    const notes = [
+      { freq: 523.25, time: 0.0, duration: 0.12 },
+      { freq: 659.25, time: 0.12, duration: 0.12 },
+      { freq: 783.99, time: 0.24, duration: 0.25 },
+    ];
+
+    notes.forEach((note) => {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(note.freq, ctx.currentTime + note.time);
+
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + note.time);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + note.time + note.duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + note.time);
+        osc.stop(ctx.currentTime + note.time + note.duration);
+      } catch (noteErr) {
+        console.warn("Oscillator note failed:", noteErr);
+      }
+    });
+  } catch (err) {
+    console.warn("Audio chime playback skipped:", err);
   }
 }
 
