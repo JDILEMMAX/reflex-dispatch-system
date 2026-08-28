@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pydantic
+httpx
+pytest
+pytest-asyncio
+playwright
+pytest-playwright
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+bcrypt==4.0.1

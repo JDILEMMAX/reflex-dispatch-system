@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflex On-Demand Dispatch & Chain of Custody System</title>
+  <meta name="description" content="Auditable on-demand dispatch and delivery verification engine for Kenyan urban retail logistics.">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top App Navigation -->
+  <header class="app-navbar" id="appNavbar">
+    <a href="/" class="brand-container">
+      <div class="brand-logo">R</div>
+      <div>
+        <div class="brand-title">REFLEX</div>
+        <div class="brand-tagline">Urban Logistics & Chain of Custody</div>
+      </div>
+    </a>
+
+    <div class="nav-actions">
+      <!-- Quick Demo Account Swapper -->
+      <div class="demo-switcher" id="demoSwitcher">
+        <span class="demo-switcher-label">Demo Role Switch:</span>
+        <button class="btn-switch-account" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')" title="Retailer (Luthuli Electronics)">Retailer</button>
+        <button class="btn-switch-account" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')" title="Central Dispatcher">Dispatcher</button>
+        <button class="btn-switch-account" onclick="quickLogin('rider_mwangi', 'Reflex2026!')" title="Rider (John Mwangi)">Rider</button>
+      </div>
+
+      <!-- Active User & Role Display -->
+      <div id="userHeaderProfile" style="display: none; align-items: center; gap: 1rem;">
+        <div class="role-badge" id="roleBadge">
+          <span class="pulse-dot"></span>
+          <span id="roleBadgeText">ROLE_RETAILER</span>
+        </div>
+        <span id="userDisplayName" style="font-weight: 600; font-size: 0.85rem; color: #cbd5e1;"></span>
+        <button class="btn-logout" onclick="logoutUser()">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <!-- ================================================== -->
+    <!-- 1. Authentication View -->
+    <!-- ================================================== -->
+    <section class="view-section active" id="viewLogin">
+      <div class="login-wrapper">
+        <div class="login-card">
+          <div class="login-header">
+            <div class="login-logo">⚡</div>
+            <h2>Reflex Command Gateway</h2>
+            <p style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">
+              Sign in with your role-segregated fleet credentials
+            </p>
+          </div>
+
+          <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+            <div class="form-group">
+              <label class="form-label" for="loginUsername">Username</label>
+              <input type="text" id="loginUsername" class="form-input" placeholder="e.g. luthuli_electronics" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="loginPassword">Password</label>
+              <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-primary" id="btnLoginSubmit">
+              <span>Authenticate Session</span> ➔
+            </button>
+          </form>
+
+          <!-- Pre-filled Evaluation Quick Buttons -->
+          <div class="quick-logins-box">
+            <div class="quick-logins-title">One-Click Evaluator Logins (Reflex2026!)</div>
+            <div class="quick-login-grid">
+              <button class="btn-quick-fill" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')">
+                🏬 <strong>Luthuli Electr.</strong><br><small>Retailer Staff</small>
+              </button>
+              <button class="btn-quick-fill" onclick="quickLogin('cbd_pharmacy', 'Reflex2026!')">
+                💊 <strong>CBD Chemist</strong><br><small>Retailer Staff</small>
+              </button>
+              <button class="btn-quick-fill" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')">
+                📡 <strong>Central Hub</strong><br><small>Dispatcher</small>
+              </button>
+              <button class="btn-quick-fill" onclick="quickLogin('rider_mwangi', 'Reflex2026!')">
+                🛵 <strong>John Mwangi</strong><br><small>Rider (Boxer 150)</small>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <!-- 2. Retailer Portal View -->
+    <!-- ================================================== -->
+    <section class="view-section" id="viewRetailer">
+      <div class="glass-panel">
+        <div class="glass-panel-header">
+          <div class="panel-title-group">
+            <div class="panel-icon-badge">🏬</div>
+            <div>
+              <h2>Retail Merchant Portal</h2>
+              <p style="color: var(--text-secondary); font-size: 0.85rem;" id="retailerStoreInfo">
+                Manage on-demand dispatches with instant PIN and QR tracking generation.
+              </p>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="openCreateOrderModal()" style="width: auto; padding: 0.65rem 1.25rem;">
+            + Log New Delivery Request
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+          <div style="background: rgba(10, 16, 30, 0.6); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-glass-subtle); flex: 1;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total Store Orders</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--accent-cyan);" id="statRetailerTotal">0</div>
+          </div>
+          <div style="background: rgba(10, 16, 30, 0.6); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-glass-subtle); flex: 1;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Active in Transit</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--accent-amber);" id="statRetailerActive">0</div>
+          </div>
+          <div style="background: rgba(10, 16, 30, 0.6); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-glass-subtle); flex: 1;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Completed Deliveries</div>
+            <div style="font-size: 1.75rem; font-weight: 700; color: var(--accent-green);" id="statRetailerDelivered">0</div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="reflex-table" id="retailerOrdersTable">
+            <thead>
+              <tr>
+                <th>Tracking Token</th>
+                <th>Recipient</th>
+                <th>Delivery Address</th>
+                <th>Item & Value</th>
+                <th>Courier Fee</th>
+                <th>Status</th>
+                <th>Doorstep PIN</th>
+                <th>Assigned Courier</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="retailerOrdersBody">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <!-- 3. Dispatcher Command Board View -->
+    <!-- ================================================== -->
+    <section class="view-section" id="viewDispatcher">
+      <div class="dispatch-grid">
+        <!-- Main Orders Dispatch Queue Area -->
+        <div class="glass-panel">
+          <div class="glass-panel-header">
+            <div class="panel-title-group">
+              <div class="panel-icon-badge">📡</div>
+              <div>
+                <h2>Central Dispatch Command Board</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                  Real-time fleet matching, order routing and delivery surveillance.
+                </p>
+              </div>
+            </div>
+            <button class="btn-secondary" onclick="loadDispatcherDashboard()">↻ Refresh Queues</button>
+          </div>
+
+          <!-- Queue Filter Tabs -->
+          <div class="queue-tabs">
+            <button class="queue-tab-btn active" id="tabUnassigned" onclick="switchDispatchQueue('UNASSIGNED')">
+              <span>Unassigned Runs</span>
+              <span class="queue-count" id="countUnassigned">0</span>
+            </button>
+            <button class="queue-tab-btn" id="tabInTransit" onclick="switchDispatchQueue('IN_TRANSIT')">
+              <span>Active In-Transit</span>
+              <span class="queue-count" id="countInTransit">0</span>
+            </button>
+            <button class="queue-tab-btn" id="tabDelivered" onclick="switchDispatchQueue('DELIVERED')">
+              <span>Delivered Archive</span>
+              <span class="queue-count" id="countDelivered">0</span>
+            </button>
+          </div>
+
+          <!-- Dispatch Orders Table -->
+          <div class="table-responsive">
+            <table class="reflex-table">
+              <thead>
+                <tr>
+                  <th>Order Token</th>
+                  <th>Origin Merchant</th>
+                  <th>Destination</th>
+                  <th>Item Details</th>
+                  <th>Status</th>
+                  <th>Assigned Rider</th>
+                  <th>Dispatch Action</th>
+                </tr>
+              </thead>
+              <tbody id="dispatcherOrdersBody">
+                <!-- Dynamically Populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Side Panel: Active Fleet Rider Roster -->
+        <div class="glass-panel">
+          <div class="glass-panel-header">
+            <div class="panel-title-group">
+              <div class="panel-icon-badge">🛵</div>
+              <div>
+                <h3 style="font-size: 1.1rem;">Active Fleet Roster</h3>
+                <p style="color: var(--text-secondary); font-size: 0.78rem;">Live Courier Availability</p>
+              </div>
+            </div>
+          </div>
+          <div id="riderRosterContainer">
+            <!-- Dynamically Populated Rider Cards -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <!-- 4. Rider Mobile Terminal View -->
+    <!-- ================================================== -->
+    <section class="view-section" id="viewRider">
+      <div class="rider-container">
+        <div class="glass-panel">
+          <div class="glass-panel-header">
+            <div class="panel-title-group">
+              <div class="panel-icon-badge">🛵</div>
+              <div>
+                <h2>Rider Mobile Terminal</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;" id="riderProfileInfo">
+                  Active Courier Delivery Run Queue
+                </p>
+              </div>
+            </div>
+            <button class="btn-secondary" onclick="loadRiderTasks()">↻ Sync Tasks</button>
+          </div>
+
+          <!-- Active Task Container -->
+          <div id="riderTasksContainer">
+            <!-- Dynamically Populated Task Cards -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================================================== -->
+  <!-- MODAL: Order Creation (Retailer) -->
+  <!-- ================================================== -->
+  <div class="modal-overlay" id="modalCreateOrder">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.25rem;">Log On-Demand Delivery</h3>
+        <button class="btn-close-modal" onclick="closeCreateOrderModal()">&times;</button>
+      </div>
+      <!-- TODO: @oswaldsly - Enhance form input tooltips and custom field styling -->
+      <form id="createOrderForm" onsubmit="handleCreateOrderSubmit(event)">
+        <div class="form-group">
+          <label class="form-label" for="orderCustomerName">Recipient Full Name</label>
+          <input type="text" id="orderCustomerName" class="form-input" placeholder="e.g. Wanjiku Kamau" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="orderCustomerPhone">Recipient Telephone Number</label>
+          <input type="text" id="orderCustomerPhone" class="form-input" placeholder="e.g. +254701234567" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="orderAddress">Destination Delivery Address</label>
+          <textarea id="orderAddress" class="form-textarea" rows="2" placeholder="e.g. Bazaar Plaza, 4th Floor, Upper Hill, Nairobi" required></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="orderItemDesc">Item Description</label>
+          <input type="text" id="orderItemDesc" class="form-input" placeholder="e.g. HP Laptop Charger & Wireless Mouse" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="orderValue">Package Value (KES)</label>
+            <input type="number" id="orderValue" class="form-input" value="3500" min="0" step="50" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="orderFee">Delivery Fee (KES)</label>
+            <input type="number" id="orderFee" class="form-input" value="300" min="0" step="50" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" id="btnSubmitOrder" style="margin-top: 1rem;">
+          Generate Delivery Tokens & Log Order
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================================================== -->
+  <!-- MODAL: Dual-Factor Proof of Delivery (POD) Keypad -->
+  <!-- ================================================== -->
+  <!-- TODO: @peakaykush - Add audio confirmation chime on verified delivery -->
+  <div class="modal-overlay" id="modalPodKeypad">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size: 1.25rem;">Doorstep Proof of Delivery</h3>
+          <p style="font-size: 0.8rem; color: var(--text-secondary);">Enter customer's 4-digit PIN or scan tracking token</p>
+        </div>
+        <button class="btn-close-modal" onclick="closePodModal()">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 1rem; text-align: center;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Verifying Order: </span>
+        <span class="token-pill" id="podOrderToken">REF-0000-XX</span>
+      </div>
+
+      <div class="pin-display-screen" id="pinDisplay">_ _ _ _</div>
+
+      <div class="keypad-grid">
+        <button class="btn-keypad" onclick="appendPinDigit('1')">1</button>
+        <button class="btn-keypad" onclick="appendPinDigit('2')">2</button>
+        <button class="btn-keypad" onclick="appendPinDigit('3')">3</button>
+        <button class="btn-keypad" onclick="appendPinDigit('4')">4</button>
+        <button class="btn-keypad" onclick="appendPinDigit('5')">5</button>
+        <button class="btn-keypad" onclick="appendPinDigit('6')">6</button>
+        <button class="btn-keypad" onclick="appendPinDigit('7')">7</button>
+        <button class="btn-keypad" onclick="appendPinDigit('8')">8</button>
+        <button class="btn-keypad" onclick="appendPinDigit('9')">9</button>
+        <button class="btn-keypad action-key" onclick="clearPinKeypad()">CLR</button>
+        <button class="btn-keypad" onclick="appendPinDigit('0')">0</button>
+        <button class="btn-keypad action-key" onclick="backspacePinDigit()">⌫</button>
+      </div>
+
+      <div style="display: flex; gap: 0.75rem;">
+        <button class="btn-primary" onclick="submitPodPin()" style="flex: 2;">
+          ✓ Verify PIN & Complete Delivery
+        </button>
+        <button class="btn-secondary" onclick="simulateQrScanPod()" style="flex: 1;" title="Simulate scanning recipient's QR token">
+          📷 QR Scan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Alert Notifications Hub -->
+  <div id="toastContainer"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

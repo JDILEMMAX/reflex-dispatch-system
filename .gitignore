@@ -1,0 +1,28 @@
+# Environments
+reflex-dispatch-system/
+.venv/
+env/
+venv/
+
+# SQLite Database Files
+*.db
+*.db-wal
+*.db-shm
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing & Reports
+.pytest_cache/
+test-results/
+playwright-report/
+
+# Misc & Local Resources
+misc/
+.DS_Store
