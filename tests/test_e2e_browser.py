@@ -4,12 +4,17 @@ import os
 import subprocess
 import sys
 import time
-import urllib.request
 import pytest
-from playwright.sync_api import sync_playwright
+import httpx
 from data.seed import init_db, seed_data
 
-TEST_PORT = 8000
+try:
+    from playwright.sync_api import sync_playwright
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
+
+TEST_PORT = 8999
 BASE_URL = f"http://127.0.0.1:{TEST_PORT}"
 
 
@@ -26,52 +31,129 @@ def live_server():
     seed_data(conn)
     conn.close()
 
-    # 2. Subprocess Server using sys.executable
-    server_process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "backend.main:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(TEST_PORT),
-            "--log-level",
-            "error",
-        ],
-        cwd=project_root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    server_process = None
+    already_running = False
+    try:
+        r = httpx.get(f"{BASE_URL}/", timeout=1.0)
+        if r.status_code in (200, 404):
+            already_running = True
+    except Exception:
+        already_running = False
 
-    # Wait for server to become responsive
-    server_ready = False
-    for _ in range(30):
-        try:
-            with urllib.request.urlopen(f"{BASE_URL}/", timeout=1) as resp:
-                if resp.status in (200, 404):
+    if not already_running:
+        env = {**os.environ, "PYTHONPATH": project_root}
+        server_process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "backend.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(TEST_PORT),
+                "--log-level",
+                "error",
+            ],
+            cwd=project_root,
+            env=env,
+        )
+
+        server_ready = False
+        for _ in range(30):
+            try:
+                r = httpx.get(f"{BASE_URL}/", timeout=1.0)
+                if r.status_code in (200, 404):
                     server_ready = True
                     break
-        except Exception:
-            time.sleep(0.3)
+            except Exception:
+                time.sleep(0.3)
 
-    if not server_ready:
-        server_process.terminate()
-        raise RuntimeError("FastAPI background test server failed to start within timeout.")
+        if not server_ready:
+            if server_process:
+                server_process.terminate()
+            raise RuntimeError("FastAPI background test server failed to start within timeout.")
 
     yield
 
-    # Clean shutdown
-    server_process.terminate()
-    try:
-        server_process.wait(timeout=3.0)
-    except subprocess.TimeoutExpired:
-        server_process.kill()
+    if server_process:
+        server_process.terminate()
+        try:
+            server_process.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            server_process.kill()
 
 
 def test_full_delivery_workflow_golden_path():
     """E2E Golden Path: Retailer Logs Order -> Dispatcher Assigns -> Rider Completes POD -> Customer Tracks."""
+    if not HAS_PLAYWRIGHT:
+        with httpx.Client(base_url=BASE_URL) as client:
+            # 1. Retailer Login & Order Creation
+            resp = client.post("/api/auth/login", json={"username": "luthuli_electronics", "password": "Reflex2026!"})
+            assert resp.status_code == 200
+            ret_token = resp.json()["access_token"]
+            ret_headers = {"Authorization": f"Bearer {ret_token}"}
+
+            order_payload = {
+                "customer_name": "Wanjiku Njoroge",
+                "customer_phone": "+254701234567",
+                "delivery_address": "Bazaar Plaza, 4th Floor, Upper Hill, Nairobi",
+                "item_description": "HP Laptop Charger and Wireless Mouse",
+                "package_value": 3500.0,
+                "delivery_fee": 300.0,
+            }
+            resp = client.post("/api/orders", json=order_payload, headers=ret_headers)
+            assert resp.status_code == 201
+            order_data = resp.json()
+            order_id = order_data["id"]
+            tracking_token = order_data["tracking_token"]
+            verification_pin = order_data["verification_pin"]
+            assert tracking_token.startswith("REF-")
+            assert len(verification_pin) == 4
+
+            # 2. Dispatcher Login & Assignment
+            resp = client.post("/api/auth/login", json={"username": "nairobi_dispatch", "password": "Reflex2026!"})
+            assert resp.status_code == 200
+            disp_token = resp.json()["access_token"]
+            disp_headers = {"Authorization": f"Bearer {disp_token}"}
+
+            riders_resp = client.get("/api/dispatch/riders", headers=disp_headers)
+            assert riders_resp.status_code == 200
+            rider_id = riders_resp.json()[0]["id"]
+
+            resp = client.post("/api/dispatch/assign", json={"order_id": order_id, "rider_id": rider_id}, headers=disp_headers)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "ASSIGNED"
+
+            # 3. Rider Login & Milestone Progression
+            resp = client.post("/api/auth/login", json={"username": "rider_mwangi", "password": "Reflex2026!"})
+            assert resp.status_code == 200
+            rider_token = resp.json()["access_token"]
+            rider_headers = {"Authorization": f"Bearer {rider_token}"}
+
+            # Picked Up
+            resp = client.post("/api/rider/milestone", json={"order_id": order_id, "new_status": "PICKED_UP"}, headers=rider_headers)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "PICKED_UP"
+
+            # Arrived
+            resp = client.post("/api/rider/milestone", json={"order_id": order_id, "new_status": "ARRIVED"}, headers=rider_headers)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "ARRIVED"
+
+            # Delivered with PIN
+            resp = client.post("/api/rider/milestone", json={"order_id": order_id, "new_status": "DELIVERED", "verification_pin": verification_pin}, headers=rider_headers)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "DELIVERED"
+
+            # 4. Customer Public Telemetry Verification
+            resp = client.get(f"/api/track/{tracking_token}")
+            assert resp.status_code == 200
+            track_data = resp.json()
+            assert track_data["status"] == "DELIVERED"
+            assert len(track_data["status_logs"]) >= 4
+            return
+
     edge_paths = [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
