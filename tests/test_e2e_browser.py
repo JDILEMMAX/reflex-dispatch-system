@@ -1,44 +1,77 @@
 """Playwright automated end-to-end browser verification suite."""
 
 import os
-import threading
+import subprocess
+import sys
 import time
+import urllib.request
 import pytest
-import uvicorn
+from playwright.sync_api import sync_playwright
 from data.seed import init_db, seed_data
-from backend.main import app
 
-# Port for local test server
-TEST_PORT = 8877
+TEST_PORT = 8000
 BASE_URL = f"http://127.0.0.1:{TEST_PORT}"
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def live_server():
-    """Launch live uvicorn ASGI server in background thread for browser testing."""
-    test_db_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    """Reset database and launch background FastAPI server on http://127.0.0.1:8000."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    test_db_dir = os.path.join(project_root, "data")
     schema_path = os.path.join(test_db_dir, "schema.sql")
     db_path = os.path.join(test_db_dir, "reflex.db")
 
+    # 1. Database Reset
     conn = init_db(db_path=db_path, schema_path=schema_path)
     seed_data(conn)
     conn.close()
 
-    config = uvicorn.Config(app=app, host="127.0.0.1", port=TEST_PORT, log_level="error")
-    server = uvicorn.Server(config=config)
+    # 2. Subprocess Server using sys.executable
+    server_process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "backend.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(TEST_PORT),
+            "--log-level",
+            "error",
+        ],
+        cwd=project_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
+    # Wait for server to become responsive
+    server_ready = False
+    for _ in range(30):
+        try:
+            with urllib.request.urlopen(f"{BASE_URL}/", timeout=1) as resp:
+                if resp.status in (200, 404):
+                    server_ready = True
+                    break
+        except Exception:
+            time.sleep(0.3)
 
-    time.sleep(1.2)
+    if not server_ready:
+        server_process.terminate()
+        raise RuntimeError("FastAPI background test server failed to start within timeout.")
+
     yield
-    server.should_exit = True
-    thread.join(timeout=2.0)
+
+    # Clean shutdown
+    server_process.terminate()
+    try:
+        server_process.wait(timeout=3.0)
+    except subprocess.TimeoutExpired:
+        server_process.kill()
 
 
-@pytest.fixture(scope="session")
-def browser_type_launch_args(browser_type_launch_args):
-    """Detect system Edge or Chrome if standalone chromium binary is not installed."""
+def test_full_delivery_workflow_golden_path():
+    """E2E Golden Path: Retailer Logs Order -> Dispatcher Assigns -> Rider Completes POD -> Customer Tracks."""
     edge_paths = [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
@@ -48,124 +81,131 @@ def browser_type_launch_args(browser_type_launch_args):
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     ]
 
+    launch_kwargs = {"headless": True}
     for p in edge_paths:
         if os.path.exists(p):
-            return {**browser_type_launch_args, "channel": "msedge"}
+            launch_kwargs["channel"] = "msedge"
+            break
 
-    for p in chrome_paths:
-        if os.path.exists(p):
-            return {**browser_type_launch_args, "channel": "chrome"}
+    if "channel" not in launch_kwargs:
+        for p in chrome_paths:
+            if os.path.exists(p):
+                launch_kwargs["channel"] = "chrome"
+                break
 
-    return browser_type_launch_args
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(**launch_kwargs)
+        page = browser.new_page()
 
+        try:
+            # 1. Retailer Order Entry: Log in as luthuli_electronics
+            page.goto(f"{BASE_URL}/")
+            page.wait_for_selector("#loginForm")
 
-def test_full_delivery_workflow_journey(page):
-    """E2E Test: Retailer Logs Order -> Dispatcher Assigns -> Rider Completes POD -> Customer Tracks."""
-    # 1. Open Application Login Screen
-    page.goto(f"{BASE_URL}/")
-    page.wait_for_selector("#loginForm")
+            page.fill("#loginUsername", "luthuli_electronics")
+            page.fill("#loginPassword", "Reflex2026!")
+            page.click("#btnLoginSubmit")
 
-    # 2. Login as Retailer (Luthuli Electronics)
-    page.fill("#loginUsername", "luthuli_electronics")
-    page.fill("#loginPassword", "Reflex2026!")
-    page.click("#btnLoginSubmit")
+            # Wait for Retailer View to activate
+            page.wait_for_selector("#viewRetailer.active")
+            assert page.is_visible("#retailerOrdersTable")
 
-    # Wait for Retailer View to activate
-    page.wait_for_selector("#viewRetailer.active")
-    assert page.is_visible("#retailerOrdersTable")
+            # Open Order Modal and create order for customer "Wanjiku Njoroge"
+            page.click("button:has-text('+ Log New Delivery Request')")
+            page.wait_for_selector("#modalCreateOrder.active")
 
-    # 3. Create New Delivery Order via Modal
-    page.click("button:has-text('+ Log New Delivery Request')")
-    page.wait_for_selector("#modalCreateOrder.active")
+            page.fill("#orderCustomerName", "Wanjiku Njoroge")
+            page.fill("#orderCustomerPhone", "+254701234567")
+            page.fill("#orderAddress", "Bazaar Plaza, 4th Floor, Upper Hill, Nairobi")
+            page.fill("#orderItemDesc", "HP Laptop Charger and Wireless Mouse")
+            page.fill("#orderValue", "3500")
+            page.fill("#orderFee", "300")
 
-    page.fill("#orderCustomerName", "Wanjiku Kamau")
-    page.fill("#orderCustomerPhone", "+254701234567")
-    page.fill("#orderAddress", "Bazaar Plaza, 4th Floor, Upper Hill, Nairobi")
-    page.fill("#orderItemDesc", "HP Laptop Charger and Wireless Mouse")
-    page.fill("#orderValue", "3500")
-    page.fill("#orderFee", "300")
+            page.click("#btnSubmitOrder")
+            page.wait_for_selector("#modalCreateOrder", state="hidden")
 
-    page.click("#btnSubmitOrder")
-    page.wait_for_selector("#modalCreateOrder:not(.active)")
+            # Retrieve generated tracking token (REF-xxxx) and capture 4-digit PIN
+            page.wait_for_selector("#retailerOrdersBody tr")
+            first_row = page.locator("#retailerOrdersBody tr").first
+            token_el = first_row.locator(".token-pill")
+            created_token = token_el.text_content().replace("↗", "").strip()
 
-    # Retrieve generated order row from table
-    page.wait_for_selector("#retailerOrdersBody tr")
-    first_row = page.locator("#retailerOrdersBody tr").first
-    token_el = first_row.locator(".token-pill")
-    created_token = token_el.text_content().replace("↗", "").strip()
+            pin_el = first_row.locator(".pin-tag")
+            pin_text = pin_el.text_content()
+            created_pin = pin_text.replace("PIN:", "").strip()
 
-    pin_el = first_row.locator(".pin-tag")
-    pin_text = pin_el.text_content()
-    created_pin = pin_text.replace("PIN:", "").strip()
+            assert created_token.startswith("REF-")
+            assert len(created_pin) == 4
 
-    assert created_token.startswith("REF-")
-    assert len(created_pin) == 4
+            # 2. Dispatcher Assignment: Log in as nairobi_dispatch
+            page.click("button:has-text('Logout')")
+            page.wait_for_selector("#viewLogin.active")
 
-    # 4. Switch Session to Central Dispatcher
-    page.click("button:has-text('Logout')")
-    page.wait_for_selector("#viewLogin.active")
+            page.fill("#loginUsername", "nairobi_dispatch")
+            page.fill("#loginPassword", "Reflex2026!")
+            page.click("#btnLoginSubmit")
 
-    page.fill("#loginUsername", "nairobi_dispatch")
-    page.fill("#loginPassword", "Reflex2026!")
-    page.click("#btnLoginSubmit")
+            # Locate the new order in unassigned queue and assign to rider John Mwangi (rider_mwangi)
+            page.wait_for_selector("#viewDispatcher.active")
+            page.wait_for_selector("#dispatcherOrdersBody tr")
 
-    # Wait for Dispatcher View
-    page.wait_for_selector("#viewDispatcher.active")
-    page.wait_for_selector("#dispatcherOrdersBody tr")
+            order_row = page.locator(f"#dispatcherOrdersBody tr:has-text('{created_token}')")
+            order_row.locator("select").select_option(label="John Mwangi (KMDF 420X)")
+            order_row.locator("button:has-text('Assign')").click()
 
-    # Locate the created order and assign to rider John Mwangi
-    order_row = page.locator(f"#dispatcherOrdersBody tr:has-text('{created_token}')")
-    order_row.locator("select").select_option(label="John Mwangi (KMDF 420X)")
-    order_row.locator("button:has-text('Assign')").click()
+            # Wait for toast confirmation
+            page.wait_for_selector(".toast-success")
 
-    # Wait for toast confirmation
-    page.wait_for_selector(".toast-success")
+            # 3. Rider Milestone Progression: Log in as rider_mwangi on mobile viewport
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.click("button:has-text('Logout')")
+            page.wait_for_selector("#viewLogin.active")
 
-    # 5. Switch Session to Rider John Mwangi
-    page.click("button:has-text('Logout')")
-    page.wait_for_selector("#viewLogin.active")
+            page.fill("#loginUsername", "rider_mwangi")
+            page.fill("#loginPassword", "Reflex2026!")
+            page.click("#btnLoginSubmit")
 
-    page.fill("#loginUsername", "rider_mwangi")
-    page.fill("#loginPassword", "Reflex2026!")
-    page.click("#btnLoginSubmit")
+            # Accept task and trigger Picked Up
+            page.wait_for_selector("#viewRider.active")
+            page.wait_for_selector(f".task-card:has-text('{created_token}')")
 
-    # Wait for Rider View
-    page.wait_for_selector("#viewRider.active")
-    page.wait_for_selector(f".task-card:has-text('{created_token}')")
+            task_card = page.locator(f".task-card:has-text('{created_token}')")
+            task_card.locator("button:has-text('Confirm Shop Package Pickup')").click()
+            page.wait_for_selector(".toast-success")
 
-    task_card = page.locator(f".task-card:has-text('{created_token}')")
+            # Trigger Arrived
+            task_card.locator("button:has-text('Confirm Arrival at Customer Doorstep')").click()
+            page.wait_for_selector(".toast-success")
 
-    # 6. Confirm Pickup at Shop
-    task_card.locator("button:has-text('Confirm Shop Package Pickup')").click()
-    page.wait_for_selector(".toast-success")
+            # 4. Proof of Delivery: Enter customer PIN and submit
+            task_card.locator("button:has-text('Enter Customer PIN / Scan POD')").click()
+            page.wait_for_selector("#modalPodKeypad.active")
 
-    # 7. Confirm Arrival at Customer Doorstep
-    task_card.locator("button:has-text('Confirm Arrival at Customer Doorstep')").click()
-    page.wait_for_selector(".toast-success")
+            for digit in created_pin:
+                page.click(f".keypad-grid button:text-is('{digit}')")
 
-    # 8. Open POD Modal and enter Customer PIN
-    task_card.locator("button:has-text('Enter Customer PIN / Scan POD')").click()
-    page.wait_for_selector("#modalPodKeypad.active")
+            page.click("button:has-text('Verify PIN & Complete Delivery')")
+            page.wait_for_selector("#modalPodKeypad", state="hidden")
+            page.wait_for_selector(".toast-success")
 
-    # Enter 4-digit PIN via keypad buttons
-    for digit in created_pin:
-        page.click(f".keypad-grid button:text-is('{digit}')")
+            # Assert Delivered state appears on rider terminal
+            assert page.is_visible("text=Delivery Verified & Chain of Custody Closed") or page.is_visible(".status-DELIVERED")
 
-    page.click("button:has-text('Verify PIN & Complete Delivery')")
-    page.wait_for_selector("#modalPodKeypad:not(.active)")
-    page.wait_for_selector(".toast-success")
+            # 5. Customer Public Stepper: Navigate to /tracker.html?token=REF-xxxx
+            page.set_viewport_size({"width": 1280, "height": 800})
+            page.goto(f"{BASE_URL}/tracker.html?token={created_token}")
+            page.wait_for_selector("#trackingDetailsCard")
 
-    # 9. Open Public Customer Tracker and verify final state
-    page.goto(f"{BASE_URL}/track/{created_token}")
-    page.wait_for_selector("#trackingDetailsCard")
+            # Assert visual stepper and status badge reflect DELIVERED
+            status_text = page.locator("#trackStatusBadge").text_content()
+            assert "DELIVERED" in status_text.upper()
 
-    # Check status badge and completed stepper
-    status_text = page.locator("#trackStatusBadge").text_content()
-    assert "DELIVERED" in status_text.upper()
+            progress_style = page.locator("#stepperProgressBar").get_attribute("style")
+            assert "100%" in progress_style
 
-    progress_style = page.locator("#stepperProgressBar").get_attribute("style")
-    assert "100%" in progress_style
+            delivered_node = page.locator("#stepNodeDelivered")
+            node_class = delivered_node.get_attribute("class")
+            assert "active" in node_class or "completed" in node_class
 
-    delivered_node = page.locator("#stepNodeDelivered")
-    node_class = delivered_node.get_attribute("class")
-    assert "active" in node_class or "completed" in node_class
+        finally:
+            browser.close()
