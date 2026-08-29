@@ -4,6 +4,7 @@
  */
 
 const API_BASE = window.location.origin;
+const QR_CODE_API = "https://api.qrserver.com/v1/create-qr-code/";
 
 // Application State
 let currentAuth = null;
@@ -164,12 +165,27 @@ function getAuthHeaders() {
 
 function startLivePolling() {
   stopLivePolling();
+
   pollingTimer = setInterval(() => {
     if (!currentAuth) return;
+
     if (currentAuth.user.role === "ROLE_RETAILER") {
       loadRetailerDashboard(true);
+
     } else if (currentAuth.user.role === "ROLE_DISPATCHER") {
+      // Don't rebuild the dispatcher table while a rider is being selected.
+      const activeElement = document.activeElement;
+
+      if (
+        activeElement &&
+        activeElement.tagName === "SELECT" &&
+        activeElement.id.startsWith("assign_select_")
+      ) {
+        return;
+      }
+
       loadDispatcherDashboard(true);
+
     } else if (currentAuth.user.role === "ROLE_RIDER") {
       loadRiderTasks(true);
     }
@@ -215,7 +231,7 @@ function renderRetailerOrdersTable(orders) {
   if (!tbody) return;
 
   if (orders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No delivery orders logged yet. Click '+ Log New Delivery Request' to start.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">No delivery orders logged yet. Click '+ Log New Delivery Request' to start.</td></tr>`;
     return;
   }
 
@@ -244,11 +260,27 @@ function renderRetailerOrdersTable(orders) {
         <span class="status-badge status-${o.status}">${o.status.replace("_", " ")}</span>
       </td>
       <td>
-        <span class="pin-tag">PIN: ${o.verification_pin}</span>
-      </td>
-      <td>
-        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
-      </td>
+        <td>
+  <span class="pin-tag">PIN: ${escapeHtml(o.verification_pin)}</span>
+</td>
+
+<td style="text-align: center;">
+  <div class="qr-code-container">
+    <img
+      src="${QR_CODE_API}?size=100x100&data=${encodeURIComponent(o.tracking_token)}"
+      alt="QR Code for ${escapeHtml(o.tracking_token)}"
+      width="100"
+      height="100"
+      style="background: white; padding: 5px; border-radius: 6px;"
+    >
+    <br>
+    <small style="color: var(--text-muted);">Scan to track</small>
+  </div>
+</td>
+
+<td>
+  ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
+</td>
       <td>
         <a href="/track/${o.tracking_token}" target="_blank" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; text-decoration: none;">
           Track Link
@@ -644,7 +676,6 @@ async function submitPodPin() {
 
     closePodModal();
     showToast("Proof of Delivery Verified! Order successfully completed.", "success");
-    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
@@ -672,60 +703,9 @@ async function simulateQrScanPod() {
 
     closePodModal();
     showToast("QR Token Matched! Proof of Delivery verified successfully.", "success");
-    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
-  }
-}
-
-// Audio confirmation chime and vibration trigger on verified delivery
-function playDeliveryChime() {
-  try {
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      try {
-        navigator.vibrate([100, 50, 100, 50, 150]);
-      } catch (vibErr) {
-        console.warn("Haptic vibration skipped:", vibErr);
-      }
-    }
-
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
-    const notes = [
-      { freq: 523.25, time: 0.0, duration: 0.12 },
-      { freq: 659.25, time: 0.12, duration: 0.12 },
-      { freq: 783.99, time: 0.24, duration: 0.25 },
-    ];
-
-    notes.forEach((note) => {
-      try {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(note.freq, ctx.currentTime + note.time);
-
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + note.time);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + note.time + note.duration);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(ctx.currentTime + note.time);
-        osc.stop(ctx.currentTime + note.time + note.duration);
-      } catch (noteErr) {
-        console.warn("Oscillator note failed:", noteErr);
-      }
-    });
-  } catch (err) {
-    console.warn("Audio chime playback skipped:", err);
   }
 }
 
