@@ -93,6 +93,7 @@ reflex-dispatch-system/
 ├── tests/                     # Automated Verification Suites
 │   ├── test_auth.py           # Unit tests for JWT authentication & role-based access guards
 │   ├── test_lifecycle.py      # State machine tests verifying linear order transitions & POD validation
+│   ├── test_models.py         # Schema contract tests for cancellation and reassignment workflows
 │   ├── test_sanity.py         # Route sanity tests checking 200/400/401/403/404 HTTP responses
 │   └── test_e2e_browser.py    # Playwright browser E2E test verifying live UI workflows across personas
 │
