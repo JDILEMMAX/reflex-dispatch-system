@@ -1,6 +1,6 @@
 /**
- * Reflex Client Application Controller & State Engine
- * Handles JWT sessions, role-based views, dynamic polling and Proof of Delivery verification.
+ * Reflex Core Client Controller
+ * Multi-persona dispatch interface state manager and API bridge
  */
 
 const API_BASE = window.location.origin;
@@ -8,159 +8,168 @@ const QR_CODE_API = "https://api.qrserver.com/v1/create-qr-code/";
 
 // Application State
 let currentAuth = null;
-let currentQueueFilter = "UNASSIGNED";
-let allDispatchOrders = [];
-let allRiders = [];
+let activeRoleView = "ROLE_RETAILER";
 let pollingTimer = null;
-
-// POD Keypad State
 let activePodOrderId = null;
 let activePodToken = null;
 let currentPinInput = "";
+let allRiders = [];
 
 // ==================================================
-// Initialization & Session Management
+// Initialization & Authentication Lifecycle
 // ==================================================
 
 document.addEventListener("DOMContentLoaded", () => {
-  restoreSession();
+  initEventListeners();
+  checkStoredSession();
 });
 
-function restoreSession() {
-  const token = localStorage.getItem("reflex_token");
-  const userData = localStorage.getItem("reflex_user");
-
-  if (token && userData) {
+function checkStoredSession() {
+  const sessionData = localStorage.getItem("reflex_session");
+  if (sessionData) {
     try {
-      currentAuth = {
-        token: token,
-        user: JSON.parse(userData),
-      };
-      updateHeaderProfile();
-      routeUserView(currentAuth.user.role);
-      startLivePolling();
-      return;
+      const parsed = JSON.parse(sessionData);
+      if (parsed.token && parsed.user) {
+        currentAuth = parsed;
+        applyAuthenticatedState();
+        return;
+      }
     } catch (e) {
-      console.error("Failed to restore stored session:", e);
+      console.warn("Invalid session cache detected. Resetting to guest view.");
+      localStorage.removeItem("reflex_session");
     }
   }
-  showView("viewLogin");
+  showLoginView();
 }
 
-function updateHeaderProfile() {
-  const profileEl = document.getElementById("userHeaderProfile");
-  const badgeText = document.getElementById("roleBadgeText");
-  const nameEl = document.getElementById("userDisplayName");
+function initEventListeners() {
+  // Login form submission
+  const loginForm = document.getElementById("loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", handleLoginSubmit);
+  }
 
-  if (currentAuth && currentAuth.user) {
-    profileEl.style.display = "flex";
-    badgeText.textContent = currentAuth.user.role.replace("ROLE_", "");
-    nameEl.textContent = currentAuth.user.full_name || currentAuth.user.username;
-  } else {
-    profileEl.style.display = "none";
+  // Order creation form
+  const createOrderForm = document.getElementById("createOrderForm");
+  if (createOrderForm) {
+    createOrderForm.addEventListener("submit", handleCreateOrderSubmit);
   }
 }
 
-function showView(viewId) {
-  document.querySelectorAll(".view-section").forEach((sec) => {
-    sec.classList.remove("active");
-  });
-  const target = document.getElementById(viewId);
-  if (target) {
-    target.classList.add("active");
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const usernameInput = document.getElementById("loginUsername");
+  const passwordInput = document.getElementById("loginPassword");
+  const errorAlert = document.getElementById("loginErrorAlert");
+
+  errorAlert.style.display = "none";
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!username || !password) {
+    showLoginError("Please enter both username and password");
+    return;
   }
-}
 
-function routeUserView(role) {
-  if (role === "ROLE_RETAILER") {
-    showView("viewRetailer");
-    loadRetailerDashboard();
-  } else if (role === "ROLE_DISPATCHER") {
-    showView("viewDispatcher");
-    loadDispatcherDashboard();
-  } else if (role === "ROLE_RIDER") {
-    showView("viewRider");
-    loadRiderTasks();
-  } else {
-    showView("viewLogin");
-  }
-}
-
-// ==================================================
-// Authentication Handlers
-// ==================================================
-
-async function handleLoginSubmit(event) {
-  event.preventDefault();
-  const username = document.getElementById("loginUsername").value.trim();
-  const password = document.getElementById("loginPassword").value.trim();
-
-  await performLogin(username, password);
-}
-
-async function quickLogin(username, password) {
-  document.getElementById("loginUsername").value = username;
-  document.getElementById("loginPassword").value = password;
-  await performLogin(username, password);
-}
-
-async function performLogin(username, password) {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Invalid credentials");
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "Authentication failed. Check credentials.");
     }
 
-    const data = await res.json();
+    const data = await response.json();
     currentAuth = {
       token: data.access_token,
-      user: {
-        id: data.user_id,
-        username: data.username,
-        role: data.role,
-        full_name: data.full_name,
-        rider_id: data.rider_id,
-      },
+      user: data.user,
     };
 
-    localStorage.setItem("reflex_token", currentAuth.token);
-    localStorage.setItem("reflex_user", JSON.stringify(currentAuth.user));
-
-    updateHeaderProfile();
-    routeUserView(currentAuth.user.role);
-    startLivePolling();
-    showToast(`Authenticated as ${currentAuth.user.full_name}`, "success");
-  } catch (error) {
-    showToast(error.message, "error");
+    localStorage.setItem("reflex_session", JSON.stringify(currentAuth));
+    applyAuthenticatedState();
+    showToast(`Welcome back, ${data.user.full_name}`, "success");
+  } catch (err) {
+    showLoginError(err.message);
   }
 }
 
-function logoutUser() {
+function showLoginError(msg) {
+  const errorAlert = document.getElementById("loginErrorAlert");
+  errorAlert.textContent = msg;
+  errorAlert.style.display = "block";
+}
+
+function quickLogin(username, password) {
+  document.getElementById("loginUsername").value = username;
+  document.getElementById("loginPassword").value = password;
+  const form = document.getElementById("loginForm");
+  form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+}
+
+function logout() {
   stopLivePolling();
-  localStorage.removeItem("reflex_token");
-  localStorage.removeItem("reflex_user");
   currentAuth = null;
-  updateHeaderProfile();
-  showView("viewLogin");
-  showToast("Logged out successfully", "success");
+  localStorage.removeItem("reflex_session");
+  showLoginView();
+  showToast("Logged out successfully", "info");
+}
+
+function applyAuthenticatedState() {
+  document.getElementById("viewLogin").classList.remove("active");
+  document.getElementById("personaSwitcherNav").style.display = "flex";
+
+  const user = currentAuth.user;
+  document.getElementById("activeUserName").textContent = user.full_name;
+  document.getElementById("activeUserRole").textContent = user.role.replace("ROLE_", "");
+
+  document.querySelectorAll(".persona-btn").forEach((btn) => {
+    btn.classList.remove("active");
+    if (btn.dataset.role === user.role) {
+      btn.classList.add("active");
+    }
+  });
+
+  switchPersonaView(user.role);
+  startLivePolling();
+}
+
+function showLoginView() {
+  stopLivePolling();
+  document.getElementById("personaSwitcherNav").style.display = "none";
+  document.querySelectorAll(".view-section").forEach((sec) => sec.classList.remove("active"));
+  document.getElementById("viewLogin").classList.add("active");
+}
+
+function switchPersonaView(role) {
+  activeRoleView = role;
+  document.querySelectorAll(".view-section").forEach((sec) => sec.classList.remove("active"));
+
+  if (role === "ROLE_RETAILER") {
+    document.getElementById("viewRetailer").classList.add("active");
+    loadRetailerDashboard();
+  } else if (role === "ROLE_DISPATCHER") {
+    document.getElementById("viewDispatcher").classList.add("active");
+    loadDispatcherDashboard();
+  } else if (role === "ROLE_RIDER") {
+    document.getElementById("viewRider").classList.add("active");
+    loadRiderTasks();
+  }
 }
 
 function getAuthHeaders() {
   if (!currentAuth || !currentAuth.token) return {};
   return {
-    "Authorization": `Bearer ${currentAuth.token}`,
     "Content-Type": "application/json",
+    Authorization: `Bearer ${currentAuth.token}`,
   };
 }
 
 // ==================================================
-// Polling Loop (3-Second Live Refresh)
+// Real-Time Polling Engine
 // ==================================================
 
 function startLivePolling() {
@@ -171,11 +180,9 @@ function startLivePolling() {
 
     if (currentAuth.user.role === "ROLE_RETAILER") {
       loadRetailerDashboard(true);
-
     } else if (currentAuth.user.role === "ROLE_DISPATCHER") {
-      // Don't rebuild the dispatcher table while a rider is being selected.
+      // Don't rebuild the dispatcher table while a rider is being selected
       const activeElement = document.activeElement;
-
       if (
         activeElement &&
         activeElement.tagName === "SELECT" &&
@@ -183,9 +190,7 @@ function startLivePolling() {
       ) {
         return;
       }
-
       loadDispatcherDashboard(true);
-
     } else if (currentAuth.user.role === "ROLE_RIDER") {
       loadRiderTasks(true);
     }
@@ -205,25 +210,31 @@ function stopLivePolling() {
 
 async function loadRetailerDashboard(isSilent = false) {
   try {
-    const res = await fetch(`${API_BASE}/api/orders/retailer`, {
+    const res = await fetch(`${API_BASE}/api/orders`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load retailer orders");
 
     const orders = await res.json();
     renderRetailerOrdersTable(orders);
-
-    // Compute Metrics
-    const total = orders.length;
-    const active = orders.filter((o) => ["ORDER_LOGGED", "ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status)).length;
-    const delivered = orders.filter((o) => o.status === "DELIVERED").length;
-
-    document.getElementById("statRetailerTotal").textContent = total;
-    document.getElementById("statRetailerActive").textContent = active;
-    document.getElementById("statRetailerDelivered").textContent = delivered;
+    updateRetailerStats(orders);
   } catch (err) {
     if (!isSilent) showToast(err.message, "error");
   }
+}
+
+function updateRetailerStats(orders) {
+  const activeCount = orders.filter((o) => o.status !== "DELIVERED").length;
+  const completedCount = orders.filter((o) => o.status === "DELIVERED").length;
+  const transitCount = orders.filter((o) => ["PICKED_UP", "ARRIVED"].includes(o.status)).length;
+
+  const statActive = document.getElementById("statRetailerActive");
+  const statCompleted = document.getElementById("statRetailerCompleted");
+  const statInTransit = document.getElementById("statRetailerTransit");
+
+  if (statActive) statActive.textContent = activeCount;
+  if (statCompleted) statCompleted.textContent = completedCount;
+  if (statInTransit) statInTransit.textContent = transitCount;
 }
 
 function renderRetailerOrdersTable(orders) {
@@ -238,49 +249,45 @@ function renderRetailerOrdersTable(orders) {
   tbody.innerHTML = orders.map((o) => `
     <tr>
       <td>
-        <a href="/track/${o.tracking_token}" target="_blank" class="token-pill" title="Open Customer Live Tracker">
-          ${o.tracking_token} ↗
-        </a>
+        <span class="token-pill">${o.tracking_token}</span><br>
+        <small style="color: var(--text-muted);">${formatDate(o.created_at)}</small>
       </td>
       <td>
         <strong>${escapeHtml(o.customer_name)}</strong><br>
-        <small style="color: var(--text-muted);">${escapeHtml(o.customer_phone)}</small>
+        <small style="color: var(--accent-cyan);">${escapeHtml(o.customer_phone)}</small>
       </td>
-      <td style="max-width: 200px;">
+      <td>
         <span style="font-size: 0.85rem;">${escapeHtml(o.delivery_address)}</span>
       </td>
       <td>
         <strong>${escapeHtml(o.item_description)}</strong><br>
-        <small style="color: var(--accent-cyan);">KES ${Number(o.package_value).toLocaleString()}</small>
+        <small style="color: var(--text-muted);">Val: KES ${Number(o.package_value).toLocaleString()}</small>
       </td>
       <td>
-        <span style="color: var(--text-secondary);">KES ${Number(o.delivery_fee).toLocaleString()}</span>
+        <strong style="color: var(--accent-green);">KES ${Number(o.delivery_fee).toLocaleString()}</strong>
       </td>
       <td>
         <span class="status-badge status-${o.status}">${o.status.replace("_", " ")}</span>
       </td>
       <td>
-        <td>
-  <span class="pin-tag">PIN: ${escapeHtml(o.verification_pin)}</span>
-</td>
-
-<td style="text-align: center;">
-  <div class="qr-code-container">
-    <img
-      src="${QR_CODE_API}?size=100x100&data=${encodeURIComponent(o.tracking_token)}"
-      alt="QR Code for ${escapeHtml(o.tracking_token)}"
-      width="100"
-      height="100"
-      style="background: white; padding: 5px; border-radius: 6px;"
-    >
-    <br>
-    <small style="color: var(--text-muted);">Scan to track</small>
-  </div>
-</td>
-
-<td>
-  ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
-</td>
+        <span class="pin-tag">PIN: ${escapeHtml(o.verification_pin)}</span>
+      </td>
+      <td style="text-align: center;">
+        <div class="qr-code-container">
+          <img
+            src="${QR_CODE_API}?size=100x100&data=${encodeURIComponent(o.tracking_token)}"
+            alt="QR Code for ${escapeHtml(o.tracking_token)}"
+            width="100"
+            height="100"
+            style="background: white; padding: 5px; border-radius: 6px;"
+          >
+          <br>
+          <small style="color: var(--text-muted);">Scan to track</small>
+        </div>
+      </td>
+      <td>
+        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
+      </td>
       <td>
         <a href="/track/${o.tracking_token}" target="_blank" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; text-decoration: none;">
           Track Link
@@ -291,23 +298,25 @@ function renderRetailerOrdersTable(orders) {
 }
 
 function openCreateOrderModal() {
-  document.getElementById("createOrderForm").reset();
-  document.getElementById("modalCreateOrder").classList.add("active");
+  const modal = document.getElementById("modalCreateOrder");
+  modal.classList.add("active");
+  document.getElementById("orderCustomerName").focus();
 }
 
 function closeCreateOrderModal() {
   document.getElementById("modalCreateOrder").classList.remove("active");
+  document.getElementById("createOrderForm").reset();
 }
 
-async function handleCreateOrderSubmit(event) {
-  event.preventDefault();
+async function handleCreateOrderSubmit(e) {
+  e.preventDefault();
   const payload = {
     customer_name: document.getElementById("orderCustomerName").value.trim(),
     customer_phone: document.getElementById("orderCustomerPhone").value.trim(),
     delivery_address: document.getElementById("orderAddress").value.trim(),
     item_description: document.getElementById("orderItemDesc").value.trim(),
-    package_value: parseFloat(document.getElementById("orderValue").value) || 0,
-    delivery_fee: parseFloat(document.getElementById("orderFee").value) || 0,
+    package_value: parseFloat(document.getElementById("orderValue").value),
+    delivery_fee: parseFloat(document.getElementById("orderFee").value),
   };
 
   try {
@@ -319,12 +328,12 @@ async function handleCreateOrderSubmit(event) {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || "Failed to log delivery order");
+      throw new Error(err.detail || "Failed to log delivery request");
     }
 
-    const createdOrder = await res.json();
+    const created = await res.json();
     closeCreateOrderModal();
-    showToast(`Order logged successfully! Token: ${createdOrder.tracking_token} (PIN: ${createdOrder.verification_pin})`, "success");
+    showToast(`Order logged! Token: ${created.tracking_token} | Doorstep PIN: ${created.verification_pin}`, "success");
     loadRetailerDashboard();
   } catch (err) {
     showToast(err.message, "error");
@@ -332,7 +341,7 @@ async function handleCreateOrderSubmit(event) {
 }
 
 // ==================================================
-// Dispatcher Command Board Methods
+// Dispatcher Command Center Methods
 // ==================================================
 
 async function loadDispatcherDashboard(isSilent = false) {
@@ -342,90 +351,79 @@ async function loadDispatcherDashboard(isSilent = false) {
       fetch(`${API_BASE}/api/dispatch/riders`, { headers: getAuthHeaders() }),
     ]);
 
-    if (!ordersRes.ok || !ridersRes.ok) throw new Error("Failed to load dispatch datasets");
+    if (!ordersRes.ok || !ridersRes.ok) throw new Error("Failed to load dispatch board data");
 
-    allDispatchOrders = await ordersRes.json();
+    const orders = await ordersRes.json();
     allRiders = await ridersRes.json();
 
-    updateDispatchQueueCounts();
-    renderDispatcherOrdersTable();
+    renderDispatcherOrdersTable(orders);
     renderRiderRoster();
+    updateDispatcherMetrics(orders);
   } catch (err) {
     if (!isSilent) showToast(err.message, "error");
   }
 }
 
-function updateDispatchQueueCounts() {
-  const unassigned = allDispatchOrders.filter((o) => o.status === "ORDER_LOGGED").length;
-  const inTransit = allDispatchOrders.filter((o) => ["ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status)).length;
-  const delivered = allDispatchOrders.filter((o) => o.status === "DELIVERED").length;
+function updateDispatcherMetrics(orders) {
+  const unassigned = orders.filter((o) => o.status === "ORDER_LOGGED").length;
+  const inTransit = orders.filter((o) => ["ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status)).length;
+  const delivered = orders.filter((o) => o.status === "DELIVERED").length;
 
-  document.getElementById("countUnassigned").textContent = unassigned;
-  document.getElementById("countInTransit").textContent = inTransit;
-  document.getElementById("countDelivered").textContent = delivered;
+  const elUnassigned = document.getElementById("metricUnassigned");
+  const elInTransit = document.getElementById("metricInTransit");
+  const elDelivered = document.getElementById("metricDelivered");
+  const elActiveRiders = document.getElementById("metricActiveRiders");
+
+  if (elUnassigned) elUnassigned.textContent = unassigned;
+  if (elInTransit) elInTransit.textContent = inTransit;
+  if (elDelivered) elDelivered.textContent = delivered;
+  if (elActiveRiders) elActiveRiders.textContent = allRiders.length;
 }
 
-function switchDispatchQueue(queueName) {
-  currentQueueFilter = queueName;
-  document.querySelectorAll(".queue-tab-btn").forEach((btn) => btn.classList.remove("active"));
-  if (queueName === "UNASSIGNED") document.getElementById("tabUnassigned").classList.add("active");
-  if (queueName === "IN_TRANSIT") document.getElementById("tabInTransit").classList.add("active");
-  if (queueName === "DELIVERED") document.getElementById("tabDelivered").classList.add("active");
-
-  renderDispatcherOrdersTable();
-}
-
-function renderDispatcherOrdersTable() {
+function renderDispatcherOrdersTable(orders) {
   const tbody = document.getElementById("dispatcherOrdersBody");
   if (!tbody) return;
 
-  let filtered = [];
-  if (currentQueueFilter === "UNASSIGNED") {
-    filtered = allDispatchOrders.filter((o) => o.status === "ORDER_LOGGED");
-  } else if (currentQueueFilter === "IN_TRANSIT") {
-    filtered = allDispatchOrders.filter((o) => ["ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status));
-  } else if (currentQueueFilter === "DELIVERED") {
-    filtered = allDispatchOrders.filter((o) => o.status === "DELIVERED");
-  }
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No orders currently in this queue.</td></tr>`;
+  if (orders.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No network orders currently in system.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = filtered.map((o) => `
+  tbody.innerHTML = orders.map((o) => `
     <tr>
       <td>
-        <a href="/track/${o.tracking_token}" target="_blank" class="token-pill">
-          ${o.tracking_token} ↗
-        </a>
+        <span class="token-pill">${o.tracking_token}</span>
       </td>
       <td>
         <strong>${escapeHtml(o.retailer_name || "Merchant")}</strong><br>
         <small style="color: var(--text-muted);">${escapeHtml(o.retailer_phone || "")}</small>
       </td>
-      <td style="max-width: 220px;">
-        <strong>${escapeHtml(o.customer_name)}</strong> (${escapeHtml(o.customer_phone)})<br>
-        <small style="color: var(--text-secondary);">${escapeHtml(o.delivery_address)}</small>
+      <td>
+        <strong>${escapeHtml(o.customer_name)}</strong><br>
+        <small style="color: var(--accent-cyan);">${escapeHtml(o.customer_phone)}</small><br>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(o.delivery_address)}</span>
       </td>
       <td>
         <span>${escapeHtml(o.item_description)}</span><br>
-        <small style="color: var(--accent-cyan);">KES ${Number(o.package_value).toLocaleString()}</small>
+        <small style="color: var(--accent-green);">Fee: KES ${Number(o.delivery_fee).toLocaleString()}</small>
       </td>
       <td>
         <span class="status-badge status-${o.status}">${o.status.replace("_", " ")}</span>
       </td>
       <td>
-        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--accent-amber); font-weight: 600;">Needs Assignment</span>`}
+        <span class="pin-tag">PIN: ${o.verification_pin}</span>
+      </td>
+      <td>
+        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
       </td>
       <td>
         ${o.status === "ORDER_LOGGED" ? `
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <select class="form-select" id="assign_select_${o.id}" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: 140px;">
+          <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <select id="assign_select_${o.id}" class="form-input" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: 140px;">
               <option value="">Select Rider...</option>
               ${allRiders.map((r) => `<option value="${r.id}">${escapeHtml(r.full_name)} (${escapeHtml(r.vehicle_plate)})</option>`).join("")}
             </select>
-            <button class="btn-primary" onclick="assignOrderToRider(${o.id})" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; width: auto;">
+            <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="assignOrderToRider(${o.id})">
               Assign
             </button>
           </div>
@@ -676,6 +674,7 @@ async function submitPodPin() {
 
     closePodModal();
     showToast("Proof of Delivery Verified! Order successfully completed.", "success");
+    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
@@ -703,9 +702,60 @@ async function simulateQrScanPod() {
 
     closePodModal();
     showToast("QR Token Matched! Proof of Delivery verified successfully.", "success");
+    playDeliveryChime();
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
+  }
+}
+
+// Audio confirmation chime and vibration trigger on verified delivery
+function playDeliveryChime() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      try {
+        navigator.vibrate([100, 50, 100, 50, 150]);
+      } catch (vibErr) {
+        console.warn("Haptic vibration skipped:", vibErr);
+      }
+    }
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    const notes = [
+      { freq: 523.25, time: 0.0, duration: 0.12 },
+      { freq: 659.25, time: 0.12, duration: 0.12 },
+      { freq: 783.99, time: 0.24, duration: 0.25 },
+    ];
+
+    notes.forEach((note) => {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(note.freq, ctx.currentTime + note.time);
+
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + note.time);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + note.time + note.duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + note.time);
+        osc.stop(ctx.currentTime + note.time + note.duration);
+      } catch (noteErr) {
+        console.warn("Oscillator note failed:", noteErr);
+      }
+    });
+  } catch (err) {
+    console.warn("Audio chime playback skipped:", err);
   }
 }
 
@@ -738,4 +788,14 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return dateStr;
+  }
 }
