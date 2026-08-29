@@ -992,3 +992,50 @@ h1, h2, h3, h4, .brand-font {
     padding-bottom: 1rem;
   }
 }
+/* ==================================================
+   Retailer Order Form Enhancements
+   @oswaldsly
+   ================================================== */
+
+#createOrderForm .form-group {
+  margin-bottom: 1.1rem;
+}
+
+#createOrderForm .form-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+#createOrderForm .form-input,
+#createOrderForm .form-textarea {
+  width: 100%;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+#createOrderForm .form-input:focus,
+#createOrderForm .form-textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+#createOrderForm .form-input::placeholder,
+#createOrderForm .form-textarea::placeholder {
+  opacity: 0.6;
+}
+
+#createOrderForm input[type="number"] {
+  font-weight: 600;
+}
+
+#createOrderForm #btnSubmitOrder {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#createOrderForm #btnSubmitOrder:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 200, 255, 0.18);
+}

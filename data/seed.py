@@ -48,12 +48,10 @@ def seed_data(conn: sqlite3.Connection) -> None:
 
     hashed_pw = get_password_hash(DEFAULT_PASSWORD)
 
-    # 1. Seed User Accounts (Retailers, Dispatcher and Riders)
+    # 1. Seed User Accounts
     users = [
         ("luthuli_electronics", hashed_pw, "ROLE_RETAILER", "Maina K. (Luthuli Electronics)", "+254712345678"),
         ("cbd_pharmacy", hashed_pw, "ROLE_RETAILER", "Dr. Achieng O. (CBD Chemist)", "+254723456789"),
-        ("westlands_pharmacy", hashed_pw, "ROLE_RETAILER", "Dr. Fatma S. (Westlands Pharmacy)", "+254700111222"),
-        ("industrial_hardware", hashed_pw, "ROLE_RETAILER", "Otieno J. (Industrial Area Hardware)", "+254700333444"),
         ("nairobi_dispatch", hashed_pw, "ROLE_DISPATCHER", "Kamau N. (Nairobi Central Hub)", "+254734567890"),
         ("rider_mwangi", hashed_pw, "ROLE_RIDER", "John Mwangi", "+254745678901"),
         ("rider_otieno", hashed_pw, "ROLE_RIDER", "Peter Otieno", "+254756789012"),
@@ -90,6 +88,8 @@ def seed_data(conn: sqlite3.Connection) -> None:
     rider_map = {row["user_id"]: row["id"] for row in cursor.fetchall()}
     rider_mwangi_id = rider_map[user_map["rider_mwangi"]]
     rider_otieno_id = rider_map[user_map["rider_otieno"]]
+
+    # TODO: @ginahAphane - Add secondary pharmacy or hardware store test accounts if required
 
     # 3. Seed Sample Delivery Orders
     orders = [
