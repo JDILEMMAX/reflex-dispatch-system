@@ -267,37 +267,38 @@
         <h3 style="font-size: 1.25rem;">Log On-Demand Delivery</h3>
         <button class="btn-close-modal" onclick="closeCreateOrderModal()">&times;</button>
       </div>
-      <!-- TODO: @oswaldsly - Enhance form input tooltips and custom field styling -->
+      <!-- Retailer Order Creation Form with Input Tooltips -->
       <form id="createOrderForm" onsubmit="handleCreateOrderSubmit(event)">
         <div class="form-group">
-          <label class="form-label" for="orderCustomerName">Recipient Full Name</label>
+          <label class="form-label" for="orderCustomerName">Recipient Full Name <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Customer receiving parcel)</span></label>
           <input type="text" id="orderCustomerName" class="form-input" placeholder="e.g. Wanjiku Kamau" required>
         </div>
         <div class="form-group">
-          <label class="form-label" for="orderCustomerPhone">Recipient Telephone Number</label>
+          <label class="form-label" for="orderCustomerPhone">Recipient Telephone Number <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(For SMS and PIN delivery)</span></label>
           <input type="text" id="orderCustomerPhone" class="form-input" placeholder="e.g. +254701234567" required>
         </div>
         <div class="form-group">
-          <label class="form-label" for="orderAddress">Destination Delivery Address</label>
+          <label class="form-label" for="orderAddress">Destination Delivery Address <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Building, floor or landmark)</span></label>
           <textarea id="orderAddress" class="form-textarea" rows="2" placeholder="e.g. Bazaar Plaza, 4th Floor, Upper Hill, Nairobi" required></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label" for="orderItemDesc">Item Description</label>
+          <label class="form-label" for="orderItemDesc">Item Description <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Brief summary of goods)</span></label>
           <input type="text" id="orderItemDesc" class="form-input" placeholder="e.g. HP Laptop Charger & Wireless Mouse" required>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div class="form-group">
-            <label class="form-label" for="orderValue">Package Value (KES)</label>
-            <input type="number" id="orderValue" class="form-input" value="3500" min="0" step="50" required>
+            <label class="form-label" for="orderValue">Package Value (KES) <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Declared)</span></label>
+            <input type="number" id="orderValue" class="form-input" placeholder="3500" min="0" step="50" required>
           </div>
           <div class="form-group">
-            <label class="form-label" for="orderFee">Delivery Fee (KES)</label>
-            <input type="number" id="orderFee" class="form-input" value="300" min="0" step="50" required>
+            <label class="form-label" for="orderFee">Courier Fee (KES) <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Delivery)</span></label>
+            <input type="number" id="orderFee" class="form-input" placeholder="300" min="0" step="10" required>
           </div>
         </div>
-        <button type="submit" class="btn-primary" id="btnSubmitOrder" style="margin-top: 1rem;">
-          Generate Delivery Tokens & Log Order
-        </button>
+        <div class="modal-footer" style="margin-top: 1.5rem;">
+          <button type="button" class="btn-secondary" onclick="closeCreateOrderModal()">Cancel</button>
+          <button type="submit" class="btn-primary" id="btnSubmitOrder">Confirm & Dispatch Order</button>
+        </div>
       </form>
     </div>
   </div>
@@ -305,7 +306,6 @@
   <!-- ================================================== -->
   <!-- MODAL: Dual-Factor Proof of Delivery (POD) Keypad -->
   <!-- ================================================== -->
-  <!-- TODO: @peakaykush - Add audio confirmation chime on verified delivery -->
   <div class="modal-overlay" id="modalPodKeypad">
     <div class="modal-card">
       <div class="modal-header">
