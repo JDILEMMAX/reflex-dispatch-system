@@ -99,7 +99,46 @@ class VerificationRequest(BaseModel):
     qr_token: Optional[str] = None
 
 
-# TODO: @ahmedabdy590-spec - Define optional delivery cancellation note schema
+class CancellationNoteRequest(BaseModel):
+    """Optional note attached when a retailer or dispatcher cancels an order."""
+    order_id: int = Field(..., gt=0, description="Delivery order ID being cancelled")
+    note: Optional[str] = Field(
+        default=None,
+        min_length=3,
+        max_length=500,
+        description="Human-readable cancellation rationale or operational note",
+    )
+
+
+class OrderCancellationNote(CancellationNoteRequest):
+    """A validated cancellation payload suitable for API requests and audit logs."""
+    note: str = Field(
+        ...,
+        min_length=3,
+        max_length=500,
+        description="Explicit reason or explanation for the cancellation",
+    )
+
+
+class ReassignmentReasonRequest(BaseModel):
+    """Dispatcher reassignment payload noting the reason a rider must be replaced."""
+    order_id: int = Field(..., gt=0, description="Delivery order ID being reassigned")
+    new_rider_id: int = Field(..., gt=0, description="Replacement rider selected for the order")
+    reason: str = Field(
+        ...,
+        min_length=3,
+        max_length=500,
+        description="Dispatcher rationale for reassigning the order to another rider",
+    )
+
+
+class DispatcherReassignmentReason(ReassignmentReasonRequest):
+    """Extended reassignment payload that includes the current rider context."""
+    current_rider_id: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Current assigned rider being replaced",
+    )
 
 
 class PublicTrackingResponse(BaseModel):
