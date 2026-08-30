@@ -303,9 +303,9 @@ function renderRetailerOrdersTable(orders) {
           : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`
         }
       </td>
-      <td>
-        <a href="/track/${o.tracking_token}" target="_blank" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; text-decoration: none;">
-          Track Link
+      <td style="min-width: 130px; text-align: center;">
+        <a href="/track/${o.tracking_token}" target="_blank" class="action-btn">
+          Track Order ↗
         </a>
       </td>
     </tr>
@@ -463,9 +463,9 @@ function renderDispatcherOrdersTable(orders) {
           : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`
         }
       </td>
-      <td>
+      <td style="min-width: 130px; text-align: center;">
         ${o.status === "ORDER_LOGGED" ? `
-          <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <div style="display: flex; gap: 0.4rem; align-items: center; justify-content: center;">
             <select id="assign_select_${o.id}" class="form-input" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: 140px;">
               <option value="">Select Rider...</option>
               ${allRiders.map((r) => `<option value="${r.id}">${escapeHtml(r.full_name)} (${escapeHtml(r.vehicle_plate)})</option>`).join("")}
@@ -475,8 +475,8 @@ function renderDispatcherOrdersTable(orders) {
             </button>
           </div>
         ` : `
-          <a href="/track/${o.tracking_token}" target="_blank" class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; text-decoration: none;">
-            Live Stepper
+          <a href="/track/${o.tracking_token}" target="_blank" class="action-btn">
+            Live Stepper ↗
           </a>
         `}
       </td>
