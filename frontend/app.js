@@ -155,6 +155,14 @@ function applyAuthenticatedState() {
   const roleEl = document.getElementById("activeUserRole");
   if (roleEl) roleEl.textContent = user.role.replace("ROLE_", "");
 
+  const navStorePortalBtn = document.getElementById("navStorePortalBtn");
+  const navDispatchBtn = document.getElementById("navDispatchBtn");
+  const navRiderBtn = document.getElementById("navRiderBtn");
+
+  if (navStorePortalBtn) navStorePortalBtn.style.display = user.role === 'ROLE_RETAILER' ? 'block' : 'none';
+  if (navDispatchBtn) navDispatchBtn.style.display = user.role === 'ROLE_DISPATCHER' ? 'block' : 'none';
+  if (navRiderBtn) navRiderBtn.style.display = user.role === 'ROLE_RIDER' ? 'block' : 'none';
+
   document.querySelectorAll(".persona-btn").forEach((btn) => {
     btn.classList.remove("active");
     if (btn.dataset.role === user.role) btn.classList.add("active");
@@ -173,6 +181,12 @@ function showLoginView() {
 }
 
 function switchPersonaView(role) {
+  const auth = getAuth();
+  if (!auth || auth.user.role !== role) {
+    showToast("Access restricted to assigned role. Use Demo Role Switch to change credentials.", "error");
+    return;
+  }
+
   activeRoleView = role;
   document.querySelectorAll(".view-section").forEach((s) => s.classList.remove("active"));
 
