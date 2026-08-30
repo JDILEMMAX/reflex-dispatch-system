@@ -193,16 +193,16 @@ function renderAuditLogs(logs) {
   }
 
   container.innerHTML = logs.map((l) => `
-    <div style="background: rgba(10, 16, 30, 0.5); padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-glass-subtle); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+    <div class="audit-card">
       <div>
-        <strong style="color: var(--accent-cyan);">${l.new_status}</strong>:
-        <span>${escapeHtml(l.notes || "State transition verified")}</span>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">
+        <strong class="audit-status-tag">${escapeHtml(l.new_status)}</strong>:
+        <span style="color: var(--text-primary); font-weight: 500;">${escapeHtml(l.notes || "State transition verified")}</span>
+        <div class="audit-meta">
           Audited by ${escapeHtml(l.changed_by_full_name || l.changed_by_username || "System")} (${escapeHtml(l.changed_by_role || "")})
         </div>
       </div>
-      <div style="color: var(--text-secondary); font-family: monospace; font-size: 0.78rem;">
-        ${l.timestamp}
+      <div class="audit-timestamp">
+        ${escapeHtml(l.timestamp)}
       </div>
     </div>
   `).join("");

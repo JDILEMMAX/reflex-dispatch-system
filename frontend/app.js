@@ -23,13 +23,44 @@ let allRiders = [];
 let activeDispatchQueue = "UNASSIGNED";
 
 // ==================================================
-// Initialization & Session Lifecycle
+// Initialization & Theme Lifecycle
 // ==================================================
 
 document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
   initEventListeners();
   checkStoredSession();
 });
+
+function initTheme() {
+  const savedTheme = localStorage.getItem("reflex_theme") || "light";
+  applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("reflex_theme", theme);
+
+  const sunIcon = document.getElementById("themeIconSun");
+  const moonIcon = document.getElementById("themeIconMoon");
+  const toggleText = document.getElementById("themeToggleText");
+
+  if (theme === "dark") {
+    if (sunIcon) sunIcon.style.display = "inline-block";
+    if (moonIcon) moonIcon.style.display = "none";
+    if (toggleText) toggleText.textContent = "Light Mode";
+  } else {
+    if (sunIcon) sunIcon.style.display = "none";
+    if (moonIcon) moonIcon.style.display = "inline-block";
+    if (toggleText) toggleText.textContent = "Dark Mode";
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+  applyTheme(newTheme);
+}
 
 function checkStoredSession() {
   const stored = getStoredAuth();
@@ -146,6 +177,9 @@ function applyAuthenticatedState() {
   const personaNav = document.getElementById("personaSwitcherNav");
   if (personaNav) personaNav.style.display = "flex";
 
+  const demoSwitcher = document.getElementById("demoSwitcher");
+  if (demoSwitcher) demoSwitcher.style.display = "none";
+
   const auth = getAuth();
   const user = auth.user;
 
@@ -176,6 +210,10 @@ function showLoginView() {
   stopPolling();
   const personaNav = document.getElementById("personaSwitcherNav");
   if (personaNav) personaNav.style.display = "none";
+
+  const demoSwitcher = document.getElementById("demoSwitcher");
+  if (demoSwitcher) demoSwitcher.style.display = "flex";
+
   document.querySelectorAll(".view-section").forEach((s) => s.classList.remove("active"));
   document.getElementById("viewLogin").classList.add("active");
 }
@@ -829,6 +867,7 @@ window.handleLoginSubmit = handleLoginSubmit;
 window.quickLogin = quickLogin;
 window.logoutUser = logout;
 window.logout = logout;
+window.toggleTheme = toggleTheme;
 window.openCreateOrderModal = openCreateOrderModal;
 window.closeCreateOrderModal = closeCreateOrderModal;
 window.handleCreateOrderSubmit = handleCreateOrderSubmit;
