@@ -122,8 +122,12 @@ def test_full_delivery_workflow_golden_path():
                     page.fill("#loginPassword", "Reflex2026!")
                     page.click("#btnLoginSubmit")
 
-                    # Wait for Retailer View to activate
-                    page.wait_for_selector("#viewRetailer.active")
+                    # Strict post-login dashboard visibility check.
+                    # If the DOM crashed (e.g. null getElementById on loginErrorAlert),
+                    # viewRetailer will never become active and this assertion will fail fast.
+                    page.wait_for_selector("#viewRetailer.active", timeout=8000)
+                    from playwright.sync_api import expect
+                    expect(page.locator("#viewRetailer")).to_be_visible()
                     assert page.is_visible("#retailerOrdersTable")
 
                     # Open Order Modal and create order for customer "Wanjiku Njoroge"
@@ -161,8 +165,10 @@ def test_full_delivery_workflow_golden_path():
                     page.fill("#loginPassword", "Reflex2026!")
                     page.click("#btnLoginSubmit")
 
-                    # Locate the new order in unassigned queue and assign to rider John Mwangi (rider_mwangi)
-                    page.wait_for_selector("#viewDispatcher.active")
+                    # Strict post-login dispatcher dashboard visibility check.
+                    page.wait_for_selector("#viewDispatcher.active", timeout=8000)
+                    from playwright.sync_api import expect
+                    expect(page.locator("#viewDispatcher")).to_be_visible()
                     page.wait_for_selector("#dispatcherOrdersBody tr")
 
                     order_row = page.locator(f"#dispatcherOrdersBody tr:has-text('{created_token}')")
@@ -181,8 +187,10 @@ def test_full_delivery_workflow_golden_path():
                     page.fill("#loginPassword", "Reflex2026!")
                     page.click("#btnLoginSubmit")
 
-                    # Accept task and trigger Picked Up
-                    page.wait_for_selector("#viewRider.active")
+                    # Strict post-login rider terminal visibility check.
+                    page.wait_for_selector("#viewRider.active", timeout=8000)
+                    from playwright.sync_api import expect
+                    expect(page.locator("#viewRider")).to_be_visible()
                     page.wait_for_selector(f".task-card:has-text('{created_token}')")
 
                     task_card = page.locator(f".task-card:has-text('{created_token}')")
@@ -210,7 +218,12 @@ def test_full_delivery_workflow_golden_path():
                     # 5. Customer Public Stepper: Navigate to /tracker.html?token=REF-xxxx
                     page.set_viewport_size({"width": 1280, "height": 800})
                     page.goto(f"{BASE_URL}/tracker.html?token={created_token}")
-                    page.wait_for_selector("#trackingDetailsCard")
+
+                    # Strict tracker card visibility check.
+                    # Prevents false positive if the fetch fails silently or tracker.js crashes.
+                    page.wait_for_selector("#trackingDetailsCard", timeout=10000)
+                    from playwright.sync_api import expect
+                    expect(page.locator("#trackingDetailsCard")).to_be_visible()
 
                     # Assert visual stepper and status badge reflect DELIVERED
                     status_text = page.locator("#trackStatusBadge").text_content()
