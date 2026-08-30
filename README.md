@@ -74,8 +74,14 @@ reflex-dispatch-system/
 ├── frontend/                  # Responsive Multi-Persona Web Interface
 │   ├── index.html             # Central login & role-aware dashboard container
 │   ├── styles.css             # Glassmorphic dark UI, mobile layouts & milestone animations
-│   ├── app.js                 # JWT session manager, role router & dynamic API fetch client
-│   └── tracker.html           # Standalone public customer milestone tracker
+│   ├── app.js                 # ES6 module entry point: persona routing & render logic
+│   ├── tracker.html           # Standalone public customer milestone tracker
+│   ├── tracker.js             # ES6 module: tracker fetch, stepper and audit log rendering
+│   └── utils/                 # ES6 utility module library
+│       ├── api.js             # All backend fetch wrappers (orders, dispatch, rider, auth)
+│       ├── auth.js            # Auth state, session persistence & Bearer header builder
+│       ├── polling.js         # Interval-based live polling engine (start/stop)
+│       └── ui.js              # Toast notifications, HTML escaping & date formatting
 │
 ├── backend/                   # FastAPI Application Core
 │   ├── main.py                # App entrypoint, CORS configuration & static file mounting
