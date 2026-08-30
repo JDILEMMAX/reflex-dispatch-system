@@ -24,11 +24,11 @@ export async function apiLogin(username, password) {
 }
 
 /**
- * GET /api/orders - Retailer's own order list
+ * GET /api/orders/retailer - Retailer's own order list
  * @param {Object} authHeaders
  */
 export async function apiFetchOrders(authHeaders) {
-  const res = await fetch(`${API_BASE}/api/orders`, { headers: authHeaders });
+  const res = await fetch(`${API_BASE}/api/orders/retailer`, { headers: authHeaders });
   if (!res.ok) throw new Error("Failed to load retailer orders");
   return res.json();
 }

@@ -82,9 +82,17 @@ async function handleLoginSubmit(e) {
     }
 
     const data = await res.json();
-    setAuth({ token: data.access_token, user: data.user });
+    // Build user from flat response fields (no nested data.user)
+    const user = {
+      id: data.user_id,
+      username: data.username,
+      full_name: data.full_name,
+      role: data.role,
+      rider_id: data.rider_id,
+    };
+    setAuth({ token: data.access_token, user });
     applyAuthenticatedState();
-    showToast(`Welcome back, ${data.user.full_name}`, "success");
+    showToast(`Welcome back, ${user.full_name}`, "success");
   } catch (err) {
     showLoginError(err.message);
   }
@@ -97,13 +105,32 @@ function showLoginError(msg) {
   el.style.display = "block";
 }
 
-function quickLogin(username, password) {
-  const u = document.getElementById("loginUsername");
-  const p = document.getElementById("loginPassword");
-  if (u) u.value = username;
-  if (p) p.value = password;
-  const form = document.getElementById("loginForm");
-  if (form) form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+async function quickLogin(username, password) {
+  // Authenticate directly and build session - avoids form dispatch timing issues
+  try {
+    const res = await fetch(`${window.location.origin}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Authentication failed. Check credentials.");
+    }
+    const data = await res.json();
+    const user = {
+      id: data.user_id,
+      username: data.username,
+      full_name: data.full_name,
+      role: data.role,
+      rider_id: data.rider_id,
+    };
+    setAuth({ token: data.access_token, user });
+    applyAuthenticatedState();
+    showToast(`Welcome back, ${user.full_name}`, "success");
+  } catch (err) {
+    showLoginError(err.message);
+  }
 }
 
 function logout() {
@@ -191,7 +218,8 @@ function livePollingTick() {
 
 async function loadRetailerDashboard(isSilent = false) {
   try {
-    const res = await fetch(`${window.location.origin}/api/orders`, {
+    // /api/orders GET is POST-only (201 Created); retailer list lives at /api/orders/retailer
+    const res = await fetch(`${window.location.origin}/api/orders/retailer`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load retailer orders");
