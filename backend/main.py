@@ -429,5 +429,24 @@ async def serve_tracker_html():
     return FileResponse(tracker_file, media_type="text/html")
 
 
+@app.get("/tracker.js")
+async def serve_tracker_js():
+    """Serve tracker.js ES6 module."""
+    js_file = os.path.join(FRONTEND_DIR, "tracker.js")
+    if os.path.exists(js_file):
+        return FileResponse(js_file, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="File not found")
+
+
+@app.get("/utils/{filename}")
+async def serve_utils(filename: str):
+    """Serve ES6 utility modules from the frontend/utils/ directory."""
+    file_path = os.path.join(FRONTEND_DIR, "utils", filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="File not found")
+
+
 if os.path.exists(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
