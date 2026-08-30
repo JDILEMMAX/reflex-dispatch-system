@@ -450,13 +450,15 @@ h1, h2, h3, h4, .brand-font {
 .status-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--radius-full);
+  white-space: nowrap;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .status-ORDER_LOGGED {
@@ -530,6 +532,19 @@ h1, h2, h3, h4, .brand-font {
   vertical-align: middle;
 }
 
+.qr-code-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-code-container img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+}
+
 .reflex-table tbody tr {
   transition: var(--transition-fast);
 }
@@ -556,12 +571,18 @@ h1, h2, h3, h4, .brand-font {
 }
 
 .pin-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
   font-family: monospace;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--accent-amber);
   background: rgba(255, 171, 0, 0.1);
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 171, 0, 0.3);
 }
 
