@@ -1,22 +1,29 @@
 /**
- * Reflex Core Client Controller
- * Multi-persona dispatch interface state manager and API bridge
+ * app.js - Reflex Delivery System: Central ES6 Module Entry Point
+ *
+ * Imports utility modules and owns all application logic:
+ * persona switching, render functions, event wiring and polling.
+ *
+ * All functions invoked by inline HTML onclick handlers are explicitly
+ * attached to window at the bottom of this file.
  */
 
-const API_BASE = window.location.origin;
+import { showToast, escapeHtml, formatDate } from "./utils/ui.js";
+import { getAuth, setAuth, getStoredAuth, getAuthHeaders } from "./utils/auth.js";
+import { startPolling, stopPolling } from "./utils/polling.js";
+
 const QR_CODE_API = "https://api.qrserver.com/v1/create-qr-code/";
 
-// Application State
-let currentAuth = null;
+// Application state
 let activeRoleView = "ROLE_RETAILER";
-let pollingTimer = null;
 let activePodOrderId = null;
 let activePodToken = null;
 let currentPinInput = "";
 let allRiders = [];
+let activeDispatchQueue = "UNASSIGNED";
 
 // ==================================================
-// Initialization & Authentication Lifecycle
+// Initialization & Session Lifecycle
 // ==================================================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -25,36 +32,26 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function checkStoredSession() {
-  const sessionData = localStorage.getItem("reflex_session");
-  if (sessionData) {
-    try {
-      const parsed = JSON.parse(sessionData);
-      if (parsed.token && parsed.user) {
-        currentAuth = parsed;
-        applyAuthenticatedState();
-        return;
-      }
-    } catch (e) {
-      console.warn("Invalid session cache detected. Resetting to guest view.");
-      localStorage.removeItem("reflex_session");
-    }
+  const stored = getStoredAuth();
+  if (stored) {
+    setAuth(stored);
+    applyAuthenticatedState();
+  } else {
+    showLoginView();
   }
-  showLoginView();
 }
 
 function initEventListeners() {
-  // Login form submission
   const loginForm = document.getElementById("loginForm");
-  if (loginForm) {
-    loginForm.addEventListener("submit", handleLoginSubmit);
-  }
+  if (loginForm) loginForm.addEventListener("submit", handleLoginSubmit);
 
-  // Order creation form
   const createOrderForm = document.getElementById("createOrderForm");
-  if (createOrderForm) {
-    createOrderForm.addEventListener("submit", handleCreateOrderSubmit);
-  }
+  if (createOrderForm) createOrderForm.addEventListener("submit", handleCreateOrderSubmit);
 }
+
+// ==================================================
+// Authentication
+// ==================================================
 
 async function handleLoginSubmit(e) {
   e.preventDefault();
@@ -62,7 +59,8 @@ async function handleLoginSubmit(e) {
   const passwordInput = document.getElementById("loginPassword");
   const errorAlert = document.getElementById("loginErrorAlert");
 
-  errorAlert.style.display = "none";
+  if (errorAlert) errorAlert.style.display = "none";
+
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
 
@@ -72,24 +70,19 @@ async function handleLoginSubmit(e) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/auth/login`, {
+    const res = await fetch(`${window.location.origin}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
 
-    if (!response.ok) {
-      const err = await response.json();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Authentication failed. Check credentials.");
     }
 
-    const data = await response.json();
-    currentAuth = {
-      token: data.access_token,
-      user: data.user,
-    };
-
-    localStorage.setItem("reflex_session", JSON.stringify(currentAuth));
+    const data = await res.json();
+    setAuth({ token: data.access_token, user: data.user });
     applyAuthenticatedState();
     showToast(`Welcome back, ${data.user.full_name}`, "success");
   } catch (err) {
@@ -98,55 +91,67 @@ async function handleLoginSubmit(e) {
 }
 
 function showLoginError(msg) {
-  const errorAlert = document.getElementById("loginErrorAlert");
-  errorAlert.textContent = msg;
-  errorAlert.style.display = "block";
+  const el = document.getElementById("loginErrorAlert");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = "block";
 }
 
 function quickLogin(username, password) {
-  document.getElementById("loginUsername").value = username;
-  document.getElementById("loginPassword").value = password;
+  const u = document.getElementById("loginUsername");
+  const p = document.getElementById("loginPassword");
+  if (u) u.value = username;
+  if (p) p.value = password;
   const form = document.getElementById("loginForm");
-  form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  if (form) form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
 }
 
 function logout() {
-  stopLivePolling();
-  currentAuth = null;
-  localStorage.removeItem("reflex_session");
+  stopPolling();
+  setAuth(null);
   showLoginView();
   showToast("Logged out successfully", "info");
 }
 
 function applyAuthenticatedState() {
   document.getElementById("viewLogin").classList.remove("active");
-  document.getElementById("personaSwitcherNav").style.display = "flex";
 
-  const user = currentAuth.user;
-  document.getElementById("activeUserName").textContent = user.full_name;
-  document.getElementById("activeUserRole").textContent = user.role.replace("ROLE_", "");
+  const personaNav = document.getElementById("personaSwitcherNav");
+  if (personaNav) personaNav.style.display = "flex";
+
+  const auth = getAuth();
+  const user = auth.user;
+
+  const nameEl = document.getElementById("activeUserName");
+  if (nameEl) nameEl.textContent = user.full_name;
+
+  const roleEl = document.getElementById("activeUserRole");
+  if (roleEl) roleEl.textContent = user.role.replace("ROLE_", "");
 
   document.querySelectorAll(".persona-btn").forEach((btn) => {
     btn.classList.remove("active");
-    if (btn.dataset.role === user.role) {
-      btn.classList.add("active");
-    }
+    if (btn.dataset.role === user.role) btn.classList.add("active");
   });
 
   switchPersonaView(user.role);
-  startLivePolling();
+  startPolling(livePollingTick, 3000);
 }
 
 function showLoginView() {
-  stopLivePolling();
-  document.getElementById("personaSwitcherNav").style.display = "none";
-  document.querySelectorAll(".view-section").forEach((sec) => sec.classList.remove("active"));
+  stopPolling();
+  const personaNav = document.getElementById("personaSwitcherNav");
+  if (personaNav) personaNav.style.display = "none";
+  document.querySelectorAll(".view-section").forEach((s) => s.classList.remove("active"));
   document.getElementById("viewLogin").classList.add("active");
 }
 
 function switchPersonaView(role) {
   activeRoleView = role;
-  document.querySelectorAll(".view-section").forEach((sec) => sec.classList.remove("active"));
+  document.querySelectorAll(".view-section").forEach((s) => s.classList.remove("active"));
+
+  document.querySelectorAll(".persona-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.role === role);
+  });
 
   if (role === "ROLE_RETAILER") {
     document.getElementById("viewRetailer").classList.add("active");
@@ -160,61 +165,36 @@ function switchPersonaView(role) {
   }
 }
 
-function getAuthHeaders() {
-  if (!currentAuth || !currentAuth.token) return {};
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${currentAuth.token}`,
-  };
-}
-
 // ==================================================
-// Real-Time Polling Engine
+// Live Polling Engine
 // ==================================================
 
-function startLivePolling() {
-  stopLivePolling();
+function livePollingTick() {
+  const auth = getAuth();
+  if (!auth) return;
 
-  pollingTimer = setInterval(() => {
-    if (!currentAuth) return;
-
-    if (currentAuth.user.role === "ROLE_RETAILER") {
-      loadRetailerDashboard(true);
-    } else if (currentAuth.user.role === "ROLE_DISPATCHER") {
-      // Don't rebuild the dispatcher table while a rider is being selected
-      const activeElement = document.activeElement;
-      if (
-        activeElement &&
-        activeElement.tagName === "SELECT" &&
-        activeElement.id.startsWith("assign_select_")
-      ) {
-        return;
-      }
-      loadDispatcherDashboard(true);
-    } else if (currentAuth.user.role === "ROLE_RIDER") {
-      loadRiderTasks(true);
-    }
-  }, 3000);
-}
-
-function stopLivePolling() {
-  if (pollingTimer) {
-    clearInterval(pollingTimer);
-    pollingTimer = null;
+  if (auth.user.role === "ROLE_RETAILER") {
+    loadRetailerDashboard(true);
+  } else if (auth.user.role === "ROLE_DISPATCHER") {
+    // Skip rebuild if a rider dropdown is focused to avoid losing the user's selection
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.tagName === "SELECT" && activeEl.id.startsWith("assign_select_")) return;
+    loadDispatcherDashboard(true);
+  } else if (auth.user.role === "ROLE_RIDER") {
+    loadRiderTasks(true);
   }
 }
 
 // ==================================================
-// Retailer Dashboard Methods
+// Retailer Dashboard
 // ==================================================
 
 async function loadRetailerDashboard(isSilent = false) {
   try {
-    const res = await fetch(`${API_BASE}/api/orders`, {
+    const res = await fetch(`${window.location.origin}/api/orders`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load retailer orders");
-
     const orders = await res.json();
     renderRetailerOrdersTable(orders);
     updateRetailerStats(orders);
@@ -230,11 +210,11 @@ function updateRetailerStats(orders) {
 
   const statActive = document.getElementById("statRetailerActive");
   const statCompleted = document.getElementById("statRetailerCompleted");
-  const statInTransit = document.getElementById("statRetailerTransit");
+  const statTransit = document.getElementById("statRetailerTransit");
 
   if (statActive) statActive.textContent = activeCount;
   if (statCompleted) statCompleted.textContent = completedCount;
-  if (statInTransit) statInTransit.textContent = transitCount;
+  if (statTransit) statTransit.textContent = transitCount;
 }
 
 function renderRetailerOrdersTable(orders) {
@@ -256,37 +236,30 @@ function renderRetailerOrdersTable(orders) {
         <strong>${escapeHtml(o.customer_name)}</strong><br>
         <small style="color: var(--accent-cyan);">${escapeHtml(o.customer_phone)}</small>
       </td>
-      <td>
-        <span style="font-size: 0.85rem;">${escapeHtml(o.delivery_address)}</span>
-      </td>
+      <td><span style="font-size: 0.85rem;">${escapeHtml(o.delivery_address)}</span></td>
       <td>
         <strong>${escapeHtml(o.item_description)}</strong><br>
         <small style="color: var(--text-muted);">Val: KES ${Number(o.package_value).toLocaleString()}</small>
       </td>
-      <td>
-        <strong style="color: var(--accent-green);">KES ${Number(o.delivery_fee).toLocaleString()}</strong>
-      </td>
-      <td>
-        <span class="status-badge status-${o.status}">${o.status.replace("_", " ")}</span>
-      </td>
-      <td>
-        <span class="pin-tag">PIN: ${escapeHtml(o.verification_pin)}</span>
-      </td>
+      <td><strong style="color: var(--accent-green);">KES ${Number(o.delivery_fee).toLocaleString()}</strong></td>
+      <td><span class="status-badge status-${o.status}">${o.status.replace(/_/g, " ")}</span></td>
+      <td><span class="pin-tag">PIN: ${escapeHtml(o.verification_pin)}</span></td>
       <td style="text-align: center;">
         <div class="qr-code-container">
           <img
             src="${QR_CODE_API}?size=100x100&data=${encodeURIComponent(o.tracking_token)}"
             alt="QR Code for ${escapeHtml(o.tracking_token)}"
-            width="100"
-            height="100"
+            width="100" height="100"
             style="background: white; padding: 5px; border-radius: 6px;"
           >
-          <br>
-          <small style="color: var(--text-muted);">Scan to track</small>
+          <br><small style="color: var(--text-muted);">Scan to track</small>
         </div>
       </td>
       <td>
-        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
+        ${o.rider_name
+          ? `<span style="display:flex;align-items:center;gap:0.4rem;">${svgRider(16)} ${escapeHtml(o.rider_name)}</span><br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>`
+          : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`
+        }
       </td>
       <td>
         <a href="/track/${o.tracking_token}" target="_blank" class="btn-secondary" style="padding: 0.35rem 0.6rem; font-size: 0.75rem; text-decoration: none;">
@@ -299,13 +272,16 @@ function renderRetailerOrdersTable(orders) {
 
 function openCreateOrderModal() {
   const modal = document.getElementById("modalCreateOrder");
-  modal.classList.add("active");
-  document.getElementById("orderCustomerName").focus();
+  if (modal) modal.classList.add("active");
+  const firstInput = document.getElementById("orderCustomerName");
+  if (firstInput) firstInput.focus();
 }
 
 function closeCreateOrderModal() {
-  document.getElementById("modalCreateOrder").classList.remove("active");
-  document.getElementById("createOrderForm").reset();
+  const modal = document.getElementById("modalCreateOrder");
+  if (modal) modal.classList.remove("active");
+  const form = document.getElementById("createOrderForm");
+  if (form) form.reset();
 }
 
 async function handleCreateOrderSubmit(e) {
@@ -320,20 +296,20 @@ async function handleCreateOrderSubmit(e) {
   };
 
   try {
-    const res = await fetch(`${API_BASE}/api/orders`, {
+    const res = await fetch(`${window.location.origin}/api/orders`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Failed to log delivery request");
     }
 
     const created = await res.json();
     closeCreateOrderModal();
-    showToast(`Order logged! Token: ${created.tracking_token} | Doorstep PIN: ${created.verification_pin}`, "success");
+    showToast(`Order logged! Token: ${created.tracking_token} | PIN: ${created.verification_pin}`, "success");
     loadRetailerDashboard();
   } catch (err) {
     showToast(err.message, "error");
@@ -341,14 +317,15 @@ async function handleCreateOrderSubmit(e) {
 }
 
 // ==================================================
-// Dispatcher Command Center Methods
+// Dispatcher Command Board
 // ==================================================
 
 async function loadDispatcherDashboard(isSilent = false) {
   try {
+    const origin = window.location.origin;
     const [ordersRes, ridersRes] = await Promise.all([
-      fetch(`${API_BASE}/api/dispatch/orders`, { headers: getAuthHeaders() }),
-      fetch(`${API_BASE}/api/dispatch/riders`, { headers: getAuthHeaders() }),
+      fetch(`${origin}/api/dispatch/orders`, { headers: getAuthHeaders() }),
+      fetch(`${origin}/api/dispatch/riders`, { headers: getAuthHeaders() }),
     ]);
 
     if (!ordersRes.ok || !ridersRes.ok) throw new Error("Failed to load dispatch board data");
@@ -380,20 +357,49 @@ function updateDispatcherMetrics(orders) {
   if (elActiveRiders) elActiveRiders.textContent = allRiders.length;
 }
 
+function switchDispatchQueue(queueStatus) {
+  activeDispatchQueue = queueStatus;
+
+  // Update active tab styling
+  ["UNASSIGNED", "IN_TRANSIT", "DELIVERED"].forEach((q) => {
+    const tabId = q === "UNASSIGNED" ? "tabUnassigned" : q === "IN_TRANSIT" ? "tabInTransit" : "tabDelivered";
+    const tab = document.getElementById(tabId);
+    if (tab) tab.classList.toggle("active", q === queueStatus);
+  });
+
+  loadDispatcherDashboard();
+}
+
 function renderDispatcherOrdersTable(orders) {
   const tbody = document.getElementById("dispatcherOrdersBody");
   if (!tbody) return;
 
-  if (orders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No network orders currently in system.</td></tr>`;
+  // Filter by active queue tab
+  let filtered = orders;
+  if (activeDispatchQueue === "UNASSIGNED") {
+    filtered = orders.filter((o) => o.status === "ORDER_LOGGED");
+  } else if (activeDispatchQueue === "IN_TRANSIT") {
+    filtered = orders.filter((o) => ["ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status));
+  } else if (activeDispatchQueue === "DELIVERED") {
+    filtered = orders.filter((o) => o.status === "DELIVERED");
+  }
+
+  // Update tab counts
+  const countUnassigned = document.getElementById("countUnassigned");
+  const countInTransit = document.getElementById("countInTransit");
+  const countDelivered = document.getElementById("countDelivered");
+  if (countUnassigned) countUnassigned.textContent = orders.filter((o) => o.status === "ORDER_LOGGED").length;
+  if (countInTransit) countInTransit.textContent = orders.filter((o) => ["ASSIGNED", "PICKED_UP", "ARRIVED"].includes(o.status)).length;
+  if (countDelivered) countDelivered.textContent = orders.filter((o) => o.status === "DELIVERED").length;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No orders in this queue.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = orders.map((o) => `
+  tbody.innerHTML = filtered.map((o) => `
     <tr>
-      <td>
-        <span class="token-pill">${o.tracking_token}</span>
-      </td>
+      <td><span class="token-pill">${o.tracking_token}</span></td>
       <td>
         <strong>${escapeHtml(o.retailer_name || "Merchant")}</strong><br>
         <small style="color: var(--text-muted);">${escapeHtml(o.retailer_phone || "")}</small>
@@ -407,14 +413,13 @@ function renderDispatcherOrdersTable(orders) {
         <span>${escapeHtml(o.item_description)}</span><br>
         <small style="color: var(--accent-green);">Fee: KES ${Number(o.delivery_fee).toLocaleString()}</small>
       </td>
+      <td><span class="status-badge status-${o.status}">${o.status.replace(/_/g, " ")}</span></td>
+      <td><span class="pin-tag">PIN: ${o.verification_pin}</span></td>
       <td>
-        <span class="status-badge status-${o.status}">${o.status.replace("_", " ")}</span>
-      </td>
-      <td>
-        <span class="pin-tag">PIN: ${o.verification_pin}</span>
-      </td>
-      <td>
-        ${o.rider_name ? `🛵 ${escapeHtml(o.rider_name)}<br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>` : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`}
+        ${o.rider_name
+          ? `<span style="display:flex;align-items:center;gap:0.4rem;">${svgRider(16)} ${escapeHtml(o.rider_name)}</span><br><small style="color: var(--text-muted);">${escapeHtml(o.vehicle_plate || "")}</small>`
+          : `<span style="color: var(--text-muted); font-style: italic;">Unassigned</span>`
+        }
       </td>
       <td>
         ${o.status === "ORDER_LOGGED" ? `
@@ -446,17 +451,15 @@ async function assignOrderToRider(orderId) {
 
   const riderId = parseInt(selectEl.value, 10);
   try {
-    const res = await fetch(`${API_BASE}/api/dispatch/assign`, {
+    const res = await fetch(`${window.location.origin}/api/dispatch/assign`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, rider_id: riderId }),
     });
-
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Assignment failed");
     }
-
     showToast("Order assigned to rider successfully", "success");
     loadDispatcherDashboard();
   } catch (err) {
@@ -468,13 +471,18 @@ function renderRiderRoster() {
   const container = document.getElementById("riderRosterContainer");
   if (!container) return;
 
+  if (allRiders.length === 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:2rem;font-size:0.85rem;">No active riders online.</div>`;
+    return;
+  }
+
   container.innerHTML = allRiders.map((r) => `
     <div class="rider-card">
       <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <div class="rider-avatar">🛵</div>
+        <div class="rider-avatar">${svgRider(20)}</div>
         <div>
           <strong style="font-size: 0.9rem;">${escapeHtml(r.full_name)}</strong><br>
-          <small style="color: var(--text-muted);">${escapeHtml(r.vehicle_plate)} • ${escapeHtml(r.phone_number)}</small>
+          <small style="color: var(--text-muted);">${escapeHtml(r.vehicle_plate)} &bull; ${escapeHtml(r.phone_number)}</small>
         </div>
       </div>
       <div style="text-align: right;">
@@ -487,16 +495,15 @@ function renderRiderRoster() {
 }
 
 // ==================================================
-// Rider Mobile Terminal Methods
+// Rider Mobile Terminal
 // ==================================================
 
 async function loadRiderTasks(isSilent = false) {
   try {
-    const res = await fetch(`${API_BASE}/api/rider/tasks`, {
+    const res = await fetch(`${window.location.origin}/api/rider/tasks`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load rider assignments");
-
     const tasks = await res.json();
     renderRiderTaskCards(tasks);
   } catch (err) {
@@ -511,7 +518,7 @@ function renderRiderTaskCards(tasks) {
   if (tasks.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🛵</div>
+        <div style="display:flex;justify-content:center;margin-bottom:0.75rem;opacity:0.5;">${svgRider(40)}</div>
         <h3>No Assigned Runs</h3>
         <p style="font-size: 0.85rem; margin-top: 0.25rem;">New dispatch runs from central control will appear here in real-time.</p>
       </div>
@@ -527,10 +534,8 @@ function renderRiderTaskCards(tasks) {
     return `
       <div class="task-card ${cardClass}">
         <div class="task-header">
-          <div>
-            <span class="token-pill">${t.tracking_token}</span>
-          </div>
-          <span class="status-badge status-${t.status}">${t.status.replace("_", " ")}</span>
+          <div><span class="token-pill">${t.tracking_token}</span></div>
+          <span class="status-badge status-${t.status}">${t.status.replace(/_/g, " ")}</span>
         </div>
 
         <div class="task-detail-row">
@@ -552,32 +557,32 @@ function renderRiderTaskCards(tasks) {
         <div class="task-detail-row">
           <div class="task-detail-label">Package:</div>
           <div class="task-detail-value">
-            ${escapeHtml(t.item_description)} • <strong style="color: var(--accent-green);">Fee: KES ${Number(t.delivery_fee).toLocaleString()}</strong>
+            ${escapeHtml(t.item_description)} &bull; <strong style="color: var(--accent-green);">Fee: KES ${Number(t.delivery_fee).toLocaleString()}</strong>
           </div>
         </div>
 
         <div class="task-actions">
           ${t.status === "ASSIGNED" ? `
             <button class="btn-milestone btn-milestone-pickup" onclick="triggerRiderMilestone(${t.id}, 'PICKED_UP')">
-              📦 Confirm Shop Package Pickup
+              ${svgPackage(18)} Confirm Shop Package Pickup
             </button>
           ` : ""}
 
           ${t.status === "PICKED_UP" ? `
             <button class="btn-milestone btn-milestone-arrived" onclick="triggerRiderMilestone(${t.id}, 'ARRIVED')">
-              📍 Confirm Arrival at Customer Doorstep
+              ${svgPin(18)} Confirm Arrival at Customer Doorstep
             </button>
           ` : ""}
 
           ${t.status === "ARRIVED" ? `
             <button class="btn-milestone btn-milestone-pod" onclick="openPodModal(${t.id}, '${t.tracking_token}')">
-              🔐 Enter Customer PIN / Scan POD
+              ${svgLock(18)} Enter Customer PIN / Scan POD
             </button>
           ` : ""}
 
           ${t.status === "DELIVERED" ? `
             <div style="text-align: center; color: var(--accent-green); font-weight: 700; font-size: 0.9rem; padding: 0.5rem; background: rgba(0, 230, 118, 0.1); border-radius: var(--radius-sm); border: 1px solid var(--accent-green);">
-              ✓ Delivery Verified & Chain of Custody Closed
+              ${svgCheckCircle(18)} Delivery Verified &amp; Chain of Custody Closed
             </div>
           ` : ""}
         </div>
@@ -588,18 +593,16 @@ function renderRiderTaskCards(tasks) {
 
 async function triggerRiderMilestone(orderId, newStatus) {
   try {
-    const res = await fetch(`${API_BASE}/api/rider/milestone`, {
+    const res = await fetch(`${window.location.origin}/api/rider/milestone`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ order_id: orderId, new_status: newStatus }),
     });
-
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Milestone update failed");
     }
-
-    showToast(`Status updated to ${newStatus.replace("_", " ")}`, "success");
+    showToast(`Status updated to ${newStatus.replace(/_/g, " ")}`, "success");
     loadRiderTasks();
   } catch (err) {
     showToast(err.message, "error");
@@ -614,13 +617,16 @@ function openPodModal(orderId, token) {
   activePodOrderId = orderId;
   activePodToken = token;
   currentPinInput = "";
-  document.getElementById("podOrderToken").textContent = token;
+  const tokenEl = document.getElementById("podOrderToken");
+  if (tokenEl) tokenEl.textContent = token;
   updatePinDisplay();
-  document.getElementById("modalPodKeypad").classList.add("active");
+  const modal = document.getElementById("modalPodKeypad");
+  if (modal) modal.classList.add("active");
 }
 
 function closePodModal() {
-  document.getElementById("modalPodKeypad").classList.remove("active");
+  const modal = document.getElementById("modalPodKeypad");
+  if (modal) modal.classList.remove("active");
   activePodOrderId = null;
   activePodToken = null;
   currentPinInput = "";
@@ -646,8 +652,7 @@ function clearPinKeypad() {
 function updatePinDisplay() {
   const el = document.getElementById("pinDisplay");
   if (!el) return;
-  const digits = currentPinInput.padEnd(4, "_").split("");
-  el.textContent = digits.join(" ");
+  el.textContent = currentPinInput.padEnd(4, "_").split("").join(" ");
 }
 
 async function submitPodPin() {
@@ -657,7 +662,7 @@ async function submitPodPin() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/rider/milestone`, {
+    const res = await fetch(`${window.location.origin}/api/rider/milestone`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -668,8 +673,8 @@ async function submitPodPin() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Verification failed");
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "PIN verification failed");
     }
 
     closePodModal();
@@ -685,7 +690,7 @@ async function simulateQrScanPod() {
   if (!activePodOrderId || !activePodToken) return;
 
   try {
-    const res = await fetch(`${API_BASE}/api/rider/milestone`, {
+    const res = await fetch(`${window.location.origin}/api/rider/milestone`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -696,8 +701,8 @@ async function simulateQrScanPod() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "QR Token verification failed");
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "QR token verification failed");
     }
 
     closePodModal();
@@ -709,93 +714,92 @@ async function simulateQrScanPod() {
   }
 }
 
-// Audio confirmation chime and vibration trigger on verified delivery
+// ==================================================
+// Audio Delivery Confirmation Chime
+// ==================================================
+
 function playDeliveryChime() {
   try {
     if (typeof navigator !== "undefined" && navigator.vibrate) {
-      try {
-        navigator.vibrate([100, 50, 100, 50, 150]);
-      } catch (vibErr) {
-        console.warn("Haptic vibration skipped:", vibErr);
-      }
+      navigator.vibrate([100, 50, 100, 50, 150]);
     }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
 
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
-    const notes = [
-      { freq: 523.25, time: 0.0, duration: 0.12 },
-      { freq: 659.25, time: 0.12, duration: 0.12 },
-      { freq: 783.99, time: 0.24, duration: 0.25 },
-    ];
-
-    notes.forEach((note) => {
+    [
+      { freq: 523.25, time: 0.0, dur: 0.12 },
+      { freq: 659.25, time: 0.12, dur: 0.12 },
+      { freq: 783.99, time: 0.24, dur: 0.25 },
+    ].forEach(({ freq, time, dur }) => {
       try {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
         osc.type = "sine";
-        osc.frequency.setValueAtTime(note.freq, ctx.currentTime + note.time);
-
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + note.time);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + note.time + note.duration);
-
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + time);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime + time);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);
-
-        osc.start(ctx.currentTime + note.time);
-        osc.stop(ctx.currentTime + note.time + note.duration);
-      } catch (noteErr) {
-        console.warn("Oscillator note failed:", noteErr);
+        osc.start(ctx.currentTime + time);
+        osc.stop(ctx.currentTime + time + dur);
+      } catch (e) {
+        // Non-fatal
       }
     });
-  } catch (err) {
-    console.warn("Audio chime playback skipped:", err);
-  }
-}
-
-// ==================================================
-// Utilities & Toast Notifications
-// ==================================================
-
-function showToast(message, type = "success") {
-  const container = document.getElementById("toastContainer");
-  if (!container) return;
-
-  const toast = document.createElement("div");
-  toast.className = `toast-alert toast-${type}`;
-  toast.innerHTML = `
-    <span>${type === "success" ? "✓" : "⚠"}</span>
-    <span>${escapeHtml(message)}</span>
-  `;
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateY(20px)";
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
-
-function escapeHtml(str) {
-  if (!str) return "";
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return "";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch (e) {
-    return dateStr;
+    // Non-fatal: audio not supported
   }
 }
+
+// ==================================================
+// Inline SVG Icon Helpers (Heroicons style)
+// ==================================================
+
+function svgRider(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h2l2 4.5-5 2-2-4H9l-1.5 5.5M9 6l1.5 4.5"/><circle cx="10" cy="4" r="1"/></svg>`;
+}
+
+function svgPackage(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>`;
+}
+
+function svgPin(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+}
+
+function svgLock(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+}
+
+function svgCheckCircle(size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+}
+
+// ==================================================
+// Global Exports for HTML Inline Handlers
+// Modules do not auto-expose to window; these explicit bindings
+// allow onclick attributes in index.html to call these functions.
+// ==================================================
+
+window.handleLoginSubmit = handleLoginSubmit;
+window.quickLogin = quickLogin;
+window.logoutUser = logout;
+window.logout = logout;
+window.openCreateOrderModal = openCreateOrderModal;
+window.closeCreateOrderModal = closeCreateOrderModal;
+window.handleCreateOrderSubmit = handleCreateOrderSubmit;
+window.loadDispatcherDashboard = () => loadDispatcherDashboard(false);
+window.switchDispatchQueue = switchDispatchQueue;
+window.assignOrderToRider = assignOrderToRider;
+window.loadRiderTasks = () => loadRiderTasks(false);
+window.closePodModal = closePodModal;
+window.appendPinDigit = appendPinDigit;
+window.clearPinKeypad = clearPinKeypad;
+window.backspacePinDigit = backspacePinDigit;
+window.submitPodPin = submitPodPin;
+window.simulateQrScanPod = simulateQrScanPod;
+window.switchPersonaView = switchPersonaView;
+window.triggerRiderMilestone = triggerRiderMilestone;
+window.openPodModal = openPodModal;
