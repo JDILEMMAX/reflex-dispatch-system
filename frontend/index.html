@@ -365,9 +365,9 @@
             <input type="number" id="orderFee" class="form-input" placeholder="300" min="0" step="10" required>
           </div>
         </div>
-        <div class="modal-footer" style="margin-top: 1.5rem;">
-          <button type="button" class="btn-secondary" onclick="closeCreateOrderModal()">Cancel</button>
-          <button type="submit" class="btn-primary" id="btnSubmitOrder">Confirm &amp; Dispatch Order</button>
+        <div class="modal-footer" style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;">
+          <button type="button" class="btn-ghost" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: var(--text-muted); padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer; white-space: nowrap;" onclick="closeCreateOrderModal()">Cancel</button>
+          <button type="submit" class="btn-primary" id="btnSubmitOrder" style="white-space: nowrap; width: auto; padding: 0.75rem 1.5rem;">Confirm &amp; Dispatch Order</button>
         </div>
       </form>
     </div>
