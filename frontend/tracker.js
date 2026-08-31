@@ -18,9 +18,38 @@ const MILESTONES = [
 let currentTrackingToken = null;
 let trackerPollInterval = null;
 
-document.addEventListener("DOMContentLoaded", () => {
+function initTheme() {
   const savedTheme = localStorage.getItem("reflex_theme") || "light";
-  document.documentElement.setAttribute("data-theme", savedTheme);
+  applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("reflex_theme", theme);
+
+  const sunIcon = document.getElementById("themeIconSun");
+  const moonIcon = document.getElementById("themeIconMoon");
+  const toggleText = document.getElementById("themeToggleText");
+
+  if (theme === "dark") {
+    if (sunIcon) sunIcon.style.display = "inline-block";
+    if (moonIcon) moonIcon.style.display = "none";
+    if (toggleText) toggleText.textContent = "Light Mode";
+  } else {
+    if (sunIcon) sunIcon.style.display = "none";
+    if (moonIcon) moonIcon.style.display = "inline-block";
+    if (toggleText) toggleText.textContent = "Dark Mode";
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+  const newTheme = currentTheme === "dark" ? "light" : "dark";
+  applyTheme(newTheme);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
 
   // 1. Resolve token from path: /track/{token}
   const pathParts = window.location.pathname.split("/").filter(Boolean);
@@ -223,3 +252,4 @@ function svgWarning(size = 14) {
 
 // Expose to window for HTML onclick handlers
 window.searchManualToken = searchManualToken;
+window.toggleTheme = toggleTheme;
