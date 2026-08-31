@@ -1,6 +1,5 @@
 # Environments
 reflex-dispatch-system/
-reflex-env/
 .venv/
 env/
 venv/

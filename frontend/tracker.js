@@ -19,6 +19,9 @@ let currentTrackingToken = null;
 let trackerPollInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+  const savedTheme = localStorage.getItem("reflex_theme") || "light";
+  document.documentElement.setAttribute("data-theme", savedTheme);
+
   // 1. Resolve token from path: /track/{token}
   const pathParts = window.location.pathname.split("/").filter(Boolean);
   if (pathParts.length >= 2 && pathParts[0] === "track") {

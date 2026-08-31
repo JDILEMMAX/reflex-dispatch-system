@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from starlette.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from backend.auth import create_access_token
 from data.seed import init_db, seed_data
 from backend.main import app
@@ -22,27 +22,31 @@ def setup_sanity_db(tmp_path, monkeypatch):
     yield test_db_path
 
 
-def test_static_asset_serving_routes():
+@pytest.mark.asyncio
+async def test_static_asset_serving_routes():
     """Verify static frontend assets (HTML, CSS, JS) respond with HTTP 200."""
-    with TestClient(app) as client:
-        res_index = client.get("/")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res_index = await client.get("/")
         assert res_index.status_code == 200
 
-        res_css = client.get("/styles.css")
+        res_css = await client.get("/styles.css")
         assert res_css.status_code == 200
 
-        res_js = client.get("/app.js")
+        res_js = await client.get("/app.js")
         assert res_js.status_code == 200
 
-        res_tracker = client.get("/tracker.html")
+        res_tracker = await client.get("/tracker.html")
         assert res_tracker.status_code == 200
 
 
-def test_public_tracking_endpoint():
+@pytest.mark.asyncio
+async def test_public_tracking_endpoint():
     """Verify public tracking endpoint for valid and non-existent tokens."""
-    with TestClient(app) as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Valid token
-        res_valid = client.get("/api/track/REF-8492-X1")
+        res_valid = await client.get("/api/track/REF-8492-X1")
         assert res_valid.status_code == 200
         data = res_valid.json()
         assert data["tracking_token"] == "REF-8492-X1"
@@ -50,11 +54,12 @@ def test_public_tracking_endpoint():
         assert "retailer_name" in data
 
         # Invalid token returns 404
-        res_invalid = client.get("/api/track/REF-NON-EXISTENT")
+        res_invalid = await client.get("/api/track/REF-NON-EXISTENT")
         assert res_invalid.status_code == 404
 
 
-def test_dispatch_riders_endpoint():
+@pytest.mark.asyncio
+async def test_dispatch_riders_endpoint():
     """Verify dispatcher can query active fleet roster."""
     disp_token = create_access_token({
         "sub": "nairobi_dispatch",
@@ -62,8 +67,9 @@ def test_dispatch_riders_endpoint():
         "user_id": 3,
     })
 
-    with TestClient(app) as client:
-        res = client.get(
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get(
             "/api/dispatch/riders",
             headers={"Authorization": f"Bearer {disp_token}"},
         )
