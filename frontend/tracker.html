@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -36,7 +36,7 @@
 
       <!-- Search Bar if token not in path -->
       <div class="glass-panel" id="tokenSearchPanel" style="display: none; padding: 1.25rem;">
-        <div style="display: flex; gap: 0.75rem;">
+        <div class="token-search-row">
           <input type="text" id="manualTokenInput" class="form-input" placeholder="Enter tracking token (e.g. REF-8492-X1)" style="flex: 1;">
           <button class="btn-primary" onclick="searchManualToken()" style="width: auto; padding: 0.65rem 1.5rem;">Track Run</button>
         </div>
@@ -50,7 +50,7 @@
       <!-- Main Tracking Card -->
       <div class="glass-panel" id="trackingDetailsCard" style="display: none;">
         
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div class="tracker-header-row">
           <div>
             <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Delivery Token</span>
             <div style="font-size: 1.75rem; font-weight: 800; font-family: monospace; color: var(--accent-cyan);" id="trackTokenDisplay">
@@ -73,7 +73,7 @@
             Your Doorstep Proof of Delivery PIN
           </div>
           <div class="doorstep-pin-number" id="trackPinDisplay">----</div>
-          <div style="font-size: 0.82rem; color: #cbd5e1;">
+          <div style="font-size: 0.82rem; color: var(--text-secondary);">
             Share this 4-digit numeric code with your rider when they reach your doorstep to finalize delivery.
           </div>
         </div>
@@ -115,7 +115,7 @@
         </div>
 
         <!-- Parcel & Recipient Details Grid -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-glass-subtle);">
+        <div class="tracker-details-grid">
           <div>
             <h4 style="font-size: 0.9rem; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.75rem;">
               Destination & Recipient

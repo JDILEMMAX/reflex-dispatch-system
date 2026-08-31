@@ -14,20 +14,22 @@
 
   <!-- Top App Navigation -->
   <header class="app-navbar" id="appNavbar">
-    <a href="/" class="brand-container">
-      <div class="brand-logo">
-        <!-- Lightning bolt icon -->
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
-      </div>
-      <div>
-        <div class="brand-title">REFLEX</div>
-        <div class="brand-tagline">Urban Logistics &amp; Chain of Custody</div>
-      </div>
-    </a>
+    <div class="nav-brand-row">
+      <a href="/" class="brand-container">
+        <div class="brand-logo">
+          <!-- Lightning bolt icon -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
+        </div>
+        <div>
+          <div class="brand-title">REFLEX</div>
+          <div class="brand-tagline">Urban Logistics &amp; Chain of Custody</div>
+        </div>
+      </a>
+    </div>
 
     <div class="nav-actions">
       <!-- Authenticated Persona Switcher (hidden until login) -->
-      <div id="personaSwitcherNav" style="display: none; align-items: center; gap: 0.5rem;">
+      <div id="personaSwitcherNav" class="persona-switcher-nav">
         <nav class="persona-nav">
           <button id="navStorePortalBtn" class="persona-btn" data-role="ROLE_RETAILER" onclick="switchPersonaView('ROLE_RETAILER')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V10l8-7 8 7v10M9 20v-5h6v5"/></svg>
@@ -46,12 +48,12 @@
         <div class="nav-separator"></div>
 
         <!-- Active User Profile Display -->
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div class="user-profile-nav">
           <div class="role-badge" id="roleBadge">
             <span class="pulse-dot"></span>
             <span id="activeUserRole">RETAILER</span>
           </div>
-          <span id="activeUserName" style="font-weight: 600; font-size: 0.85rem; color: #cbd5e1;"></span>
+          <span id="activeUserName" class="active-user-name-text"></span>
           <button class="btn-logout" onclick="logoutUser()">Logout</button>
         </div>
       </div>
@@ -59,10 +61,19 @@
       <!-- Quick Demo Account Swapper (pre-login) -->
       <div class="demo-switcher" id="demoSwitcher">
         <span class="demo-switcher-label">Demo Role Switch:</span>
-        <button class="btn-switch-account" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')" title="Retailer (Luthuli Electronics)">Retailer</button>
-        <button class="btn-switch-account" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')" title="Central Dispatcher">Dispatcher</button>
-        <button class="btn-switch-account" onclick="quickLogin('rider_mwangi', 'Reflex2026!')" title="Rider (John Mwangi)">Rider</button>
+        <div class="demo-switcher-buttons">
+          <button class="btn-switch-account" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')" title="Retailer (Luthuli Electronics)">Retailer</button>
+          <button class="btn-switch-account" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')" title="Central Dispatcher">Dispatcher</button>
+          <button class="btn-switch-account" onclick="quickLogin('rider_mwangi', 'Reflex2026!')" title="Rider (John Mwangi)">Rider</button>
+        </div>
       </div>
+
+      <!-- Theme Toggle Button (Light/Dark Mode) -->
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Dark/Light Mode">
+        <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="themeToggleText">Dark Mode</span>
+      </button>
     </div>
   </header>
 
@@ -73,58 +84,141 @@
     <!-- ================================================== -->
     <section class="view-section active" id="viewLogin">
       <div class="login-wrapper">
-        <div class="login-card">
-          <div class="login-header">
-            <div class="login-logo">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
-            </div>
-            <h2>Reflex Command Gateway</h2>
-            <p style="color: var(--text-secondary); font-size: 0.88rem; margin-top: 0.25rem;">
-              Sign in with your role-segregated fleet credentials
+        <div class="login-container-split">
+          
+          <!-- Left Hero Narrative Panel (Human Context & Value) -->
+          <div class="login-hero-panel">
+            <h1 class="hero-title">
+              On-demand retail dispatch with verifiable delivery proof.
+            </h1>
+
+            <p class="hero-description">
+              Connecting Kenyan urban merchants, central dispatchers, and boda couriers with an auditable, real-time chain of custody.
             </p>
-          </div>
 
-          <form id="loginForm" onsubmit="handleLoginSubmit(event)">
-            <div class="form-group">
-              <label class="form-label" for="loginUsername">Username</label>
-              <input type="text" id="loginUsername" class="form-input" placeholder="e.g. luthuli_electronics" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="loginPassword">Password</label>
-              <input type="password" id="loginPassword" class="form-input" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required>
-            </div>
+            <div class="hero-features-list">
+              <div class="hero-feature-item">
+                <div class="hero-feature-icon icon-store">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V10l8-7 8 7v10M9 20v-5h6v5"/></svg>
+                </div>
+                <div>
+                  <h4>Store Merchant Portal</h4>
+                  <p>Log customer packages with instant PIN &amp; QR verification tokens.</p>
+                </div>
+              </div>
 
-            <!-- Login error alert - populated by app.js on failed auth -->
-            <div id="loginErrorAlert" class="login-error-alert" style="display: none;" role="alert"></div>
+              <div class="hero-feature-item">
+                <div class="hero-feature-icon icon-dispatch">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.929 4.929A10 10 0 0 0 2 12a10 10 0 0 0 2.929 7.071M19.07 4.929A10 10 0 0 1 22 12a10 10 0 0 1-2.93 7.071M7.757 7.757A6 6 0 0 0 6 12a6 6 0 0 0 1.757 4.243M16.243 7.757A6 6 0 0 1 18 12a6 6 0 0 1-1.757 4.243M12 12h.01"/></svg>
+                </div>
+                <div>
+                  <h4>Fleet Command Board</h4>
+                  <p>Real-time order matching, rider rosters and live route tracking.</p>
+                </div>
+              </div>
 
-            <button type="submit" class="btn-primary" id="btnLoginSubmit">
-              <span>Authenticate Session</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
-          </form>
-
-          <!-- Pre-filled Evaluation Quick Buttons -->
-          <div class="quick-logins-box">
-            <div class="quick-logins-title">One-Click Evaluator Logins (Reflex2026!)</div>
-            <div class="quick-login-grid">
-              <button class="btn-quick-fill" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V10l8-7 8 7v10M9 20v-5h6v5"/></svg>
-                <strong>Luthuli Electr.</strong><br><small>Retailer Staff</small>
-              </button>
-              <button class="btn-quick-fill" onclick="quickLogin('cbd_pharmacy', 'Reflex2026!')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10ZM4 22v-2a8 8 0 0 1 16 0v2"/></svg>
-                <strong>CBD Chemist</strong><br><small>Retailer Staff</small>
-              </button>
-              <button class="btn-quick-fill" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.929 4.929A10 10 0 0 0 2 12a10 10 0 0 0 2.929 7.071M19.07 4.929A10 10 0 0 1 22 12a10 10 0 0 1-2.93 7.071M7.757 7.757A6 6 0 0 0 6 12a6 6 0 0 0 1.757 4.243M16.243 7.757A6 6 0 0 1 18 12a6 6 0 0 1-1.757 4.243M12 12h.01"/></svg>
-                <strong>Central Hub</strong><br><small>Dispatcher</small>
-              </button>
-              <button class="btn-quick-fill" onclick="quickLogin('rider_mwangi', 'Reflex2026!')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h2l2 4.5-5 2-2-4H9l-1.5 5.5M9 6l1.5 4.5"/><circle cx="10" cy="4" r="1"/></svg>
-                <strong>John Mwangi</strong><br><small>Rider (Boxer 150)</small>
-              </button>
+              <div class="hero-feature-item">
+                <div class="hero-feature-icon icon-rider">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h2l2 4.5-5 2-2-4H9l-1.5 5.5M9 6l1.5 4.5"/><circle cx="10" cy="4" r="1"/></svg>
+                </div>
+                <div>
+                  <h4>Rider Mobile Terminal</h4>
+                  <p>Mobile-first run list with dual-factor doorstep PIN validation.</p>
+                </div>
+              </div>
             </div>
           </div>
+
+          <!-- Right Login Form Card (Natural & Human UI/UX) -->
+          <div class="login-card">
+            <div class="login-header">
+              <div class="login-logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
+              </div>
+              <h2>Sign in to Reflex</h2>
+              <p class="login-subtitle">
+                Enter your account credentials to access your dispatch dashboard
+              </p>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+              <div class="form-group">
+                <label class="form-label" for="loginUsername">Username</label>
+                <div class="input-with-icon">
+                  <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <input type="text" id="loginUsername" class="form-input" placeholder="e.g. luthuli_electronics" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="loginPassword">Password</label>
+                <div class="input-with-icon">
+                  <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+                </div>
+              </div>
+
+              <!-- Login error alert - populated by app.js on failed auth -->
+              <div id="loginErrorAlert" class="login-error-alert" style="display: none;" role="alert"></div>
+
+              <button type="submit" class="btn-primary" id="btnLoginSubmit">
+                <span>Sign In to Dashboard</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </form>
+
+            <!-- Pre-filled Evaluation Quick Buttons -->
+            <div class="quick-logins-box">
+              <div class="quick-logins-header">
+                <span class="quick-logins-title">Quick Demo Sign-In</span>
+                <span class="quick-logins-badge">Password: Reflex2026!</span>
+              </div>
+
+              <div class="quick-login-grid">
+                <button type="button" class="btn-quick-fill" onclick="quickLogin('luthuli_electronics', 'Reflex2026!')">
+                  <div class="quick-fill-icon store-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V10l8-7 8 7v10M9 20v-5h6v5"/></svg>
+                  </div>
+                  <div class="quick-fill-text">
+                    <strong>Luthuli Electr.</strong>
+                    <span>Retailer Staff</span>
+                  </div>
+                </button>
+
+                <button type="button" class="btn-quick-fill" onclick="quickLogin('cbd_pharmacy', 'Reflex2026!')">
+                  <div class="quick-fill-icon store-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10ZM4 22v-2a8 8 0 0 1 16 0v2"/></svg>
+                  </div>
+                  <div class="quick-fill-text">
+                    <strong>CBD Chemist</strong>
+                    <span>Retailer Staff</span>
+                  </div>
+                </button>
+
+                <button type="button" class="btn-quick-fill" onclick="quickLogin('nairobi_dispatch', 'Reflex2026!')">
+                  <div class="quick-fill-icon dispatch-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.929 4.929A10 10 0 0 0 2 12a10 10 0 0 0 2.929 7.071M19.07 4.929A10 10 0 0 1 22 12a10 10 0 0 1-2.93 7.071M7.757 7.757A6 6 0 0 0 6 12a6 6 0 0 0 1.757 4.243M16.243 7.757A6 6 0 0 1 18 12a6 6 0 0 1-1.757 4.243M12 12h.01"/></svg>
+                  </div>
+                  <div class="quick-fill-text">
+                    <strong>Central Hub</strong>
+                    <span>Dispatcher</span>
+                  </div>
+                </button>
+
+                <button type="button" class="btn-quick-fill" onclick="quickLogin('rider_mwangi', 'Reflex2026!')">
+                  <div class="quick-fill-icon rider-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h2l2 4.5-5 2-2-4H9l-1.5 5.5M9 6l1.5 4.5"/><circle cx="10" cy="4" r="1"/></svg>
+                  </div>
+                  <div class="quick-fill-text">
+                    <strong>John Mwangi</strong>
+                    <span>Rider (Boxer 150)</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       </div>
     </section>
@@ -152,18 +246,35 @@
         </div>
 
         <!-- Retailer KPI Stats Row -->
-        <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-          <div class="metric-card">
-            <div class="metric-label">Active Orders</div>
-            <div class="metric-value" id="statRetailerActive" style="color: var(--accent-amber);">0</div>
+        <div class="metrics-grid">
+          <div class="metric-card active-card">
+            <div class="metric-icon active-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div>
+              <div class="metric-label">Active Orders</div>
+              <div class="metric-value" id="statRetailerActive">0</div>
+            </div>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">In Transit</div>
-            <div class="metric-value" id="statRetailerTransit" style="color: var(--accent-cyan);">0</div>
+
+          <div class="metric-card transit-card">
+            <div class="metric-icon transit-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            </div>
+            <div>
+              <div class="metric-label">In Transit</div>
+              <div class="metric-value" id="statRetailerTransit">0</div>
+            </div>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">Completed</div>
-            <div class="metric-value" id="statRetailerCompleted" style="color: var(--accent-green);">0</div>
+
+          <div class="metric-card completed-card">
+            <div class="metric-icon completed-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div class="metric-label">Completed</div>
+              <div class="metric-value" id="statRetailerCompleted">0</div>
+            </div>
           </div>
         </div>
 
@@ -217,22 +328,45 @@
           </div>
 
           <!-- Dispatcher KPI Metric Cards -->
-          <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-            <div class="metric-card">
-              <div class="metric-label">Unassigned</div>
-              <div class="metric-value" id="metricUnassigned" style="color: var(--accent-amber);">0</div>
+          <div class="metrics-grid">
+            <div class="metric-card active-card">
+              <div class="metric-icon active-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div>
+                <div class="metric-label">Unassigned</div>
+                <div class="metric-value" id="metricUnassigned">0</div>
+              </div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">In Transit</div>
-              <div class="metric-value" id="metricInTransit" style="color: var(--accent-cyan);">0</div>
+
+            <div class="metric-card transit-card">
+              <div class="metric-icon transit-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              </div>
+              <div>
+                <div class="metric-label">In Transit</div>
+                <div class="metric-value" id="metricInTransit">0</div>
+              </div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Delivered</div>
-              <div class="metric-value" id="metricDelivered" style="color: var(--accent-green);">0</div>
+
+            <div class="metric-card completed-card">
+              <div class="metric-icon completed-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div class="metric-label">Delivered</div>
+                <div class="metric-value" id="metricDelivered">0</div>
+              </div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Active Riders</div>
-              <div class="metric-value" id="metricActiveRiders" style="color: var(--accent-purple);">0</div>
+
+            <div class="metric-card rider-card-kpi">
+              <div class="metric-icon rider-icon-kpi">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h2l2 4.5-5 2-2-4H9l-1.5 5.5M9 6l1.5 4.5"/><circle cx="10" cy="4" r="1"/></svg>
+              </div>
+              <div>
+                <div class="metric-label">Active Riders</div>
+                <div class="metric-value" id="metricActiveRiders">0</div>
+              </div>
             </div>
           </div>
 
@@ -264,7 +398,7 @@
                   <th>Status</th>
                   <th>Doorstep PIN</th>
                   <th>Assigned Rider</th>
-                  <th style="min-width: 130px; text-align: center;">Dispatch Action</th>
+                  <th style="text-align: center;">Dispatch Action</th>
                 </tr>
               </thead>
               <tbody id="dispatcherOrdersBody">
@@ -355,7 +489,7 @@
           <label class="form-label" for="orderItemDesc">Item Description <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Brief summary of goods)</span></label>
           <input type="text" id="orderItemDesc" class="form-input" placeholder="e.g. HP Laptop Charger &amp; Wireless Mouse" required>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-grid-2col">
           <div class="form-group">
             <label class="form-label" for="orderValue">Package Value (KES) <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Declared)</span></label>
             <input type="number" id="orderValue" class="form-input" placeholder="3500" min="0" step="50" required>
@@ -365,9 +499,9 @@
             <input type="number" id="orderFee" class="form-input" placeholder="300" min="0" step="10" required>
           </div>
         </div>
-        <div class="modal-footer" style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;">
-          <button type="button" class="btn-ghost" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: var(--text-muted); padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer; white-space: nowrap;" onclick="closeCreateOrderModal()">Cancel</button>
-          <button type="submit" class="btn-primary" id="btnSubmitOrder" style="white-space: nowrap; width: auto; padding: 0.75rem 1.5rem;">Confirm &amp; Dispatch Order</button>
+        <div class="modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeCreateOrderModal()">Cancel</button>
+          <button type="submit" class="btn-primary" id="btnSubmitOrder">Confirm &amp; Dispatch Order</button>
         </div>
       </form>
     </div>
@@ -408,7 +542,7 @@
         <button class="btn-keypad action-key" onclick="backspacePinDigit()">&#9003;</button>
       </div>
 
-      <div style="display: flex; gap: 0.75rem;">
+      <div class="pod-modal-actions">
         <button class="btn-primary" onclick="submitPodPin()" style="flex: 2;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"/></svg>
           Verify PIN &amp; Complete Delivery
